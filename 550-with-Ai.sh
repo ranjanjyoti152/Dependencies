@@ -40,6 +40,8 @@ sudo dpkg -i cudnn-local-repo-ubuntu2004-9.0.0_1.0-1_amd64.deb
 sudo cp /var/cudnn-local-repo-ubuntu2004-9.0.0/cudnn-*-keyring.gpg /usr/share/keyrings/
 sudo apt-get update
 sudo apt-get -y install cudnn-cuda-12
+echo 'export PATH=/usr/local/cuda-12.4/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
 # Compile OPENCV 
 sudo apt-get install -y build-essential cmake git unzip pkg-config make
 sudo apt-get install -y python3.8-dev python3-numpy libtbb2 libtbb-dev
