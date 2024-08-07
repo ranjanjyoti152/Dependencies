@@ -40,8 +40,8 @@ sudo cp /var/cudnn-local-repo-ubuntu2004-9.3.0/cudnn-*-keyring.gpg /usr/share/ke
 sudo apt-get update
 sudo apt-get -y install cudnn
 sudo apt-get -y install cudnn-cuda-12
-echo 'export PATH=/usr/local/cuda-12.4/bin:$PATH' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+echo 'export PATH=/usr/local/cuda-12.2/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
 echo "###############################################################################################################################################"
 echo "##############################                                                                              ###################################"
 echo "##############################                            INSTALLATION COMPLETE                             ###################################"
