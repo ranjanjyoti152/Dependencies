@@ -20,7 +20,7 @@ make install
 cd ..
 cd qmi_wwan_q
 make 
-make install
+sudo make install
 cd ..
 
 # reboot the device .
