@@ -1,0 +1,88 @@
+# Configure RM520N-GL
+# flash the Jetson Device 
+# install the module and connect antena 
+# instert the sim card 
+# install the Appropriate Driver 
+
+# Driver Link (G-drive)
+https://drive.google.com/drive/folders/1cSBHLULeLd6IgdgsGNCZ3aCSSiA36dTB?usp=share_link
+
+# Download the all Zip File 
+# Extract all 
+# Install Driver Commands 
+cd pcie_mhi
+make
+make install 
+cd ..
+cd qmi_wwan_q
+make 
+make install
+
+# reboot the device .
+
+# Testing the network connectivity 
+
+#install minicom 
+
+sudo apt install minicom -y 
+
+#configure the modem address on minicom 
+
+sudo minicom -s
+# Go to (Serial Port setup)
+# Change Serial Device to /dev/ttyUSB2
+# Change Software flow Control to Yes & press Enter then (Save setup as dfl)
+# then Exit from Minicom 
+
+# COMMANDS FOR ACTIVATING NETWORK FOR (ONE TIME )
+
+sudo minicom -D /dev/ttyUSB2 # This will open Minicom Control Pannel , run these AT commands one by one ignoring the errors . 
+AT+QCFG="usbnet",3
+AT+QNETDEVCTL=2,3,1
+AT+CFUN=1,1
+
+Open a new SSH window Check for the USB 1 / 0 ip 
+
+then Reboot the machine once 
+
+# ACTIVATE AUTO CONNECT ON RESTART 
+
+# log in to SSH Of the Device 
+
+# On home Folder 
+
+wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/modem.sh
+chmod +x modem.sh
+
+# on the terminal
+
+sudo apt install nano -y 
+crontab -e
+choose nano as Editor 
+
+# add This line to last of the script 
+
+@reboot /home/proxpc/modem.sh
+
+# Press Control-o to save the script 
+
+# then type 
+
+sudo visudo 
+
+# and add this line to the script
+proxpc ALL=(ALL) NOPASSWD: /usr/bin/minicom
+
+# press controll-o to save the file .
+
+# uninstall the native modem manager .
+sudo apt-get remove --purge modemmanager -y 
+sudo apt autoremove -y 
+sudo reboot 
+
+YOU ARE NOW GOOD TO GO . 
+
+
+
+
+
