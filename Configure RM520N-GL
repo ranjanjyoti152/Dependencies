@@ -4,10 +4,14 @@
 # instert the sim card 
 # install the Appropriate Driver 
 
-# Driver Link (G-drive)
-https://drive.google.com/drive/folders/1cSBHLULeLd6IgdgsGNCZ3aCSSiA36dTB?usp=share_link
 
-# Download all the Zip File 
+
+# Download all the Zip File
+wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/pcie_mhi.zip
+wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/qmi_wwan_q.zip
+unzip pcie_mhi.zip
+unzip qmi_wwan_q.zip
+  
 # Extract all 
 # Install Driver Commands 
 cd pcie_mhi
@@ -17,6 +21,7 @@ cd ..
 cd qmi_wwan_q
 make 
 make install
+cd ..
 
 # reboot the device .
 
