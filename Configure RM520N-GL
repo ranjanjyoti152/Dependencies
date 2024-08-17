@@ -28,8 +28,9 @@ cd ..
 # Testing the network connectivity 
 
 #install minicom 
-
+sudo apt update -y
 sudo apt install minicom -y 
+
 
 #configure the modem address on minicom 
 
