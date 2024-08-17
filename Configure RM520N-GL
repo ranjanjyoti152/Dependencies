@@ -58,7 +58,7 @@ chmod +x modem.sh
 
 sudo apt install nano -y 
 crontab -e
-choose nano as Editor 
+#choose nano as Editor 
 
 # add This line to last of the script 
 
