@@ -70,6 +70,7 @@ crontab -e
 @reboot /home/proxpc/modem.sh
 
 # Press Control-o to save the script 
+# Press Control-x to Exit From Editor
 
 # then type 
 
@@ -79,6 +80,7 @@ sudo visudo
 proxpc ALL=(ALL) NOPASSWD: /usr/bin/minicom
 
 # press controll-o to save the file .
+# Press Control-x to Exit From Editor
 
 # uninstall the native modem manager .
 sudo apt-get remove --purge modemmanager -y 
