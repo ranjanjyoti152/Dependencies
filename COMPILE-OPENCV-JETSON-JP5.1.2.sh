@@ -24,18 +24,10 @@ install_opencv () {
 	  else
 	    echo "Due to limited swap, make only uses 1 core"
 	    NO_JOB=1
-	  fi
-      else
-          echo "Unable to determine the Jetson Nano model."
-          exit 1
-      fi
-      echo ""
-  else
-      echo "Error: /proc/device-tree/model not found. Are you sure this is a Jetson Nano?"
-      exit 1
-  fi
+	 
+ 
   
-  echo "Installing OpenCV 4.9.0 on your Nano"
+  echo "Installing OpenCV 4.9.0 on your Jetson"
   echo "It will take 3.5 hours !"
   
   # reveal the CUDA location
