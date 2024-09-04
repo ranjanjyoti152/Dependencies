@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Assign a random value to the password variable
-rustdesk_pw=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+# Set a custom password
+rustdesk_pw="Prox@123"
 
 # Get your config string from your Web portal and Fill Below
 rustdesk_cfg="secure-string"
@@ -16,41 +16,33 @@ fi
 
 # Identify OS
 if [ -f /etc/os-release ]; then
-    # freedesktop.org and systemd
     . /etc/os-release
     OS=$NAME
     VER=$VERSION_ID
 
     UPSTREAM_ID=${ID_LIKE,,}
 
-    # Fallback to ID_LIKE if ID was not 'ubuntu' or 'debian'
     if [ "${UPSTREAM_ID}" != "debian" ] && [ "${UPSTREAM_ID}" != "ubuntu" ]; then
         UPSTREAM_ID="$(echo ${ID_LIKE,,} | sed s/\"//g | cut -d' ' -f1)"
     fi
 
 elif type lsb_release >/dev/null 2>&1; then
-    # linuxbase.org
     OS=$(lsb_release -si)
     VER=$(lsb_release -sr)
 elif [ -f /etc/lsb-release ]; then
-    # For some versions of Debian/Ubuntu without lsb_release command
     . /etc/lsb-release
     OS=$DISTRIB_ID
     VER=$DISTRIB_RELEASE
 elif [ -f /etc/debian_version ]; then
-    # Older Debian, Ubuntu, etc.
     OS=Debian
     VER=$(cat /etc/debian_version)
 elif [ -f /etc/SuSE-release ]; then
-    # Older SuSE etc.
     OS=SuSE
     VER=$(cat /etc/SuSE-release)
 elif [ -f /etc/redhat-release ]; then
-    # Older Red Hat, CentOS, etc.
     OS=RedHat
     VER=$(cat /etc/redhat-release)
 else
-    # Fall back to uname, e.g. "Linux <version>", also works for BSD, etc.
     OS=$(uname -s)
     VER=$(uname -r)
 fi
@@ -72,32 +64,67 @@ elif [ "${UPSTREAM_ID}" = "suse" ]; then
     zypper -n install --allow-unsigned-rpm ./rustdesk-${RDLATEST}.x86_64-suse.rpm >/dev/null
 else
     echo "Unsupported OS"
-    # here you could ask the user for permission to try and install anyway
-    # if they say yes, then do the install
-    # if they say no, exit the script
     exit 1
 fi
 
-# Run the rustdesk command with --get-id and store the output in the rustdesk_id variable
-rustdesk_id=$(rustdesk --get-id)
+# Ensure RustDesk directories exist for the root and user profiles
+mkdir -p /home/${SUDO_USER}/.config/rustdesk
+mkdir -p /root/.config/rustdesk
 
-# Apply new password to RustDesk
-rustdesk --password $rustdesk_pw &> /dev/null
+# Set the custom password permanently
+rustdesk --password ${rustdesk_pw}
 
-rustdesk --config $rustdesk_cfg
+# Kill any existing RustDesk processes
+sudo pkill -f "rustdesk"
 
+# Setup RustDesk in the user profile
+rustdesktoml2a="$(cat << EOF
+rendezvous_server = '122.187.43.226'
+nat_type = 1
+serial = 3
+[options]
+rendezvous-servers = 'rs-ny.rustdesk.com,rs-sg.rustdesk.com,rs-cn.rustdesk.com'
+key = 'x+aLnDBZOIYjUmpiJYczxshbHqKOUExojrfaCby5AD4='
+custom-rendezvous-server = '122.187.43.226'
+api-server = 'https://122.187.43.226'
+relay-server = '122.187.43.226'
+EOF
+)"
+echo "${rustdesktoml2a}" | sudo tee /home/${SUDO_USER}/.config/rustdesk/RustDesk2.toml > /dev/null
+
+# Setup RustDesk in the root profile
+rustdesktoml2b="$(cat << EOF
+rendezvous_server = '122.187.43.226'
+nat_type = 1
+serial = 3
+[options]
+rendezvous-servers = 'rs-ny.rustdesk.com,rs-sg.rustdesk.com,rs-cn.rustdesk.com'
+key = 'x+aLnDBZOIYjUmpiJYczxshbHqKOUExojrfaCby5AD4='
+custom-rendezvous-server = '122.187.43.226'
+api-server = 'https://122.187.43.226'
+relay-server = '122.187.43.226'
+EOF
+)"
+echo "${rustdesktoml2b}" | sudo tee /root/.config/rustdesk/RustDesk2.toml > /dev/null
+
+# Restart the RustDesk service
 systemctl restart rustdesk
+
+# Verify that RustDesk is running and check for errors
+if systemctl is-active --quiet rustdesk; then
+    echo "RustDesk service is running successfully."
+else
+    echo "RustDesk service failed to start. Please check the service logs for more information."
+fi
 
 echo "All done! Please double check the Network settings tab in RustDesk."
 echo ""
 echo "..............................................."
-# Check if the rustdesk_id is not empty
 if [ -n "$rustdesk_id" ]; then
-	echo "RustDesk ID: $rustdesk_id"
+    echo "RustDesk ID: $rustdesk_id"
 else
-	echo "Failed to get RustDesk ID."
+    echo "Failed to get RustDesk ID."
 fi
 
-# Echo the value of the password variable
 echo "Password: $rustdesk_pw"
 echo "..............................................."
