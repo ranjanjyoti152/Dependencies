@@ -1,0 +1,7 @@
+# nvcc on jetson platform 
+ls /usr/local/cuda/bin/nvcc
+nano ~/.bashrc
+export PATH=/usr/local/cuda/bin:$PATH
+source ~/.bashrc
+echo $PATH
+nvcc --version
