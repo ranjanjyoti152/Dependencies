@@ -54,22 +54,57 @@ RDLATEST=$(curl https://api.github.com/repos/rustdesk/rustdesk/releases/latest -
 
 echo "Installing RustDesk"
 if [ "${ID}" = "debian" ] || [ "$OS" = "Ubuntu" ] || [ "$OS" = "Debian" ] || [ "${UPSTREAM_ID}" = "ubuntu" ] || [ "${UPSTREAM_ID}" = "debian" ]; then
-    wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}-x86_64.deb
-    apt-get install -fy ./rustdesk-${RDLATEST}-x86_64.deb >/dev/null
+    if [ "$(uname -m)" = "aarch64" ]; then
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}-aarch64.deb
+        apt-get install -fy ./rustdesk-${RDLATEST}-aarch64.deb >/dev/null
+    else
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}-x86_64.deb
+        apt-get install -fy ./rustdesk-${RDLATEST}-x86_64.deb >/dev/null
+    fi
 elif [ "$OS" = "CentOS" ] || [ "$OS" = "RedHat" ] || [ "$OS" = "Fedora Linux" ] || [ "${UPSTREAM_ID}" = "rhel" ]; then
-    wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}.x86_64.rpm
-    yum localinstall ./rustdesk-${RDLATEST}.x86_64.rpm -y >/dev/null
+    if [ "$(uname -m)" = "aarch64" ]; then
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}-aarch64.rpm
+        yum localinstall ./rustdesk-${RDLATEST}-aarch64.rpm -y >/dev/null
+    else
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}.x86_64.rpm
+        yum localinstall ./rustdesk-${RDLATEST}.x86_64.rpm -y >/dev/null
+    fi
 elif [ "${UPSTREAM_ID}" = "suse" ]; then
-    wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}.x86_64-suse.rpm
-    zypper -n install --allow-unsigned-rpm ./rustdesk-${RDLATEST}.x86_64-suse.rpm >/dev/null
+    if [ "$(uname -m)" = "aarch64" ]; then
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}-aarch64-suse.rpm
+        zypper -n install --allow-unsigned-rpm ./rustdesk-${RDLATEST}-aarch64-suse.rpm >/dev/null
+    else
+        wget https://github.com/rustdesk/rustdesk/releases/download/${RDLATEST}/rustdesk-${RDLATEST}.x86_64-suse.rpm
+        zypper -n install --allow-unsigned-rpm ./rustdesk-${RDLATEST}.x86_64-suse.rpm >/dev/null
+    fi
 else
     echo "Unsupported OS"
     exit 1
 fi
 
 # Ensure RustDesk directories exist for the root and user profiles
-mkdir -p /home/${SUDO_USER}/.config/rustdesk
-mkdir -p /root/.config/rustdesk
+USER_CONFIG_DIR="/home/${SUDO_USER}/.config/rustdesk"
+ROOT_CONFIG_DIR="/root/.config/rustdesk"
+
+if [ ! -d "$USER_CONFIG_DIR" ]; then
+    mkdir -p "$USER_CONFIG_DIR"
+fi
+
+if [ ! -d "$ROOT_CONFIG_DIR" ]; then
+    mkdir -p "$ROOT_CONFIG_DIR"
+fi
+
+# Ensure RustDesk config files exist
+USER_CONFIG_FILE="$USER_CONFIG_DIR/RustDesk2.toml"
+ROOT_CONFIG_FILE="$ROOT_CONFIG_DIR/RustDesk2.toml"
+
+if [ ! -f "$USER_CONFIG_FILE" ]; then
+    touch "$USER_CONFIG_FILE"
+fi
+
+if [ ! -f "$ROOT_CONFIG_FILE" ]; then
+    touch "$ROOT_CONFIG_FILE"
+fi
 
 # Set the custom password permanently
 rustdesk --password ${rustdesk_pw}
@@ -90,7 +125,7 @@ api-server = 'https://122.187.43.226'
 relay-server = '122.187.43.226'
 EOF
 )"
-echo "${rustdesktoml2a}" | sudo tee /home/${SUDO_USER}/.config/rustdesk/RustDesk2.toml > /dev/null
+echo "${rustdesktoml2a}" | sudo tee "$USER_CONFIG_FILE" > /dev/null
 
 # Setup RustDesk in the root profile
 rustdesktoml2b="$(cat << EOF
@@ -105,7 +140,7 @@ api-server = 'https://122.187.43.226'
 relay-server = '122.187.43.226'
 EOF
 )"
-echo "${rustdesktoml2b}" | sudo tee /root/.config/rustdesk/RustDesk2.toml > /dev/null
+echo "${rustdesktoml2b}" | sudo tee "$ROOT_CONFIG_FILE" > /dev/null
 
 # Restart the RustDesk service
 systemctl restart rustdesk
