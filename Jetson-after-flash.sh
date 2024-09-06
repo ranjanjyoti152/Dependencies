@@ -1,4 +1,5 @@
 #!/bin/bash
+sudo apt update 
 
 # Function to print colored messages
 print_info() {
