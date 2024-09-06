@@ -1,97 +1,97 @@
-# Configure RM520N-GL
-# flash the Jetson Device 
-# install the module and connect antena 
-# instert the sim card 
-# install the Appropriate Driver 
+# How to Set Up the RM520N-GL Modem on a Jetson Device
 
-# uninstall the native modem manager .
-sudo apt-get remove --purge modemmanager -y 
-sudo apt autoremove -y 
+# Prepare Your Jetson Device:
+# Flash the Jetson device with the appropriate software if not already done.
+# Attach the RM520N-GL module to your Jetson device.
+# Connect the antenna to the modem and insert the SIM card into the modem.
+# Remove the Default Modem Manager: Open a terminal on your Jetson and run the following commands to remove the default modem manager:
 
-# Download all the Zip File
+sudo apt-get remove --purge modemmanager -y
+sudo apt autoremove -y
+
+# Download the Necessary Drivers: Run these commands to download and unzip the required drivers:
+
 wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/pcie_mhi.zip
 wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/qmi_wwan_q.zip
 unzip pcie_mhi.zip
 unzip qmi_wwan_q.zip
-  
-# Extract all 
-# Install Driver Commands 
+
+# Install the Drivers: Follow these steps to install the drivers:
+
 cd pcie_mhi
 make
-make install 
+sudo make install
 cd ..
 cd qmi_wwan_q
-make 
+make
 sudo make install
 cd ..
 
-# reboot the device .
+Reboot the Jetson Device: After installing the drivers, reboot your device:
 
-# Testing the network connectivity 
+sudo reboot
 
-#install minicom 
+# Test Network Connectivity:
+# Install the minicom tool, which will help you communicate with the modem:
+
 sudo apt update -y
-sudo apt install minicom -y 
+sudo apt install minicom -y
 
-
-#configure the modem address on minicom 
+# Configure minicom:
 
 sudo minicom -s
-# Go to (Serial Port setup)
-# Change Serial Device to /dev/ttyUSB2
-# Change Software flow Control to Yes & press Enter then (Save setup as dfl)
-# then Exit from Minicom 
 
-# COMMANDS FOR ACTIVATING NETWORK FOR (ONE TIME )
+# In the menu, select Serial Port Setup.
+# Change Serial Device to /dev/ttyUSB2.
+# Enable Software Flow Control.
+# Save the setup and exit minicom.
 
-sudo minicom -D /dev/ttyUSB2 # This will open Minicom Control Pannel , run these AT commands one by one ignoring the errors . 
+# Activate the Network (One-Time Setup):
+# Start minicom:
+
+sudo minicom -D /dev/ttyUSB2
+
+# In the minicom terminal, type these commands one at a time (ignore any errors):
+
 AT+QCFG="usbnet",3
 AT+QNETDEVCTL=2,3,1
 AT+CFUN=1,1
 
-Open a new SSH window Check for the USB 1 / 0 ip 
+# Check the Network Connection: Open a new terminal and check for network connectivity by verifying if USB 0 or 1 has an IP address. 
+# Then, reboot the device again:
 
-then Reboot the machine once 
+sudo reboot
 
-# ACTIVATE AUTO CONNECT ON RESTART 
-
-# log in to SSH Of the Device 
-
-# On home Folder 
+# Set Up Automatic Network Connection on Restart:
+# Download a script that will automate the modem connection process:
 
 wget https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/modem.sh
 chmod +x modem.sh
 
-# on the terminal
+# Open the crontab editor to run this script at startup:
 
-sudo apt install nano -y 
 crontab -e
-#choose nano as Editor 
 
-# add This line to last of the script 
+# Choose nano as the editor.
+# Add this line to the end of the file:
 
 @reboot /home/proxpc/modem.sh
 
-# Press Control-o to save the script 
-# Press Control-x to Exit From Editor
+# Press Ctrl+O to save and Ctrl+X to exit.
 
-# then type 
+# Give Permissions for minicom to Run Without a Password: Open the sudoers file to allow minicom to run without needing a password:
 
-sudo visudo 
+sudo visudo
 
-# and add this line to the script
+# Add this line to the file:
+
 proxpc ALL=(ALL) NOPASSWD: /usr/bin/minicom
 
-# press controll-o to save the file .
-# Press Control-x to Exit From Editor
+# Press Ctrl+O to save and Ctrl+X to exit.
 
-# Reboot the computer 
+# Final Reboot: Reboot your system to apply all changes:
 
-sudo reboot 
+sudo reboot
 
-YOU ARE NOW GOOD TO GO . 
-
-
-
-
+# You’re all set! Now your Jetson device will automatically connect to the network when it starts up.
 
