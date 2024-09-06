@@ -1,5 +1,6 @@
 #!/bin/bash
-sudo apt update 
+sudo apt update
+sudo apt install build-essential -y
 
 # Function to print colored messages
 print_info() {
