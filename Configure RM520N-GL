@@ -27,7 +27,7 @@ make
 sudo make install
 cd ..
 
-Reboot the Jetson Device: After installing the drivers, reboot your device:
+# Reboot the Jetson Device: After installing the drivers, reboot your device:
 
 sudo reboot
 
