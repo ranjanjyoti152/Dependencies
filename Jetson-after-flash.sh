@@ -91,6 +91,11 @@ print_info "Verifying NVCC installation..."
 wget -nv -O- https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/Verify-NVCC.sh | sh - \
     && print_success "NVCC verification script executed!"
 
+# Run RM520N-GL setup script after NVCC installation
+print_info "Running RM520N-GL modem setup script..."
+wget -nv -O- https://raw.githubusercontent.com/ranjanjyoti152/Dependencies/main/RM520N-GL-SETUP.sh | sh \
+    && print_success "RM520N-GL setup script executed!"
+
 # Make swap script executable and run it
 print_info "Making swap script executable..."
 chmod +x swap.sh && print_success "Swap script made executable!"
