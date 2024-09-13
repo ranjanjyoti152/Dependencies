@@ -1,32 +1,49 @@
 #!/bin/bash
 
+# Color codes for colored output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No color
+
 # Function to check if a tool is installed, if not, install it
 install_tool() {
     tool=$1
     package=$2
     if ! command -v $tool &> /dev/null; then
-        echo "$tool is not installed. Installing..."
+        echo -e "${YELLOW}$tool is not installed. Installing...${NC}"
         sudo apt-get install -y $package
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}$tool installed successfully.${NC}"
+        else
+            echo -e "${RED}Failed to install $tool.${NC}"
+        fi
     else
-        echo "$tool is already installed."
+        echo -e "${GREEN}$tool is already installed.${NC}"
     fi
 }
 
 # Function to install GPU-Burn (for CUDA GPUs)
 install_gpu_burn() {
     if [ ! -d "$HOME/gpu-burn" ]; then
-        echo "gpu-burn not found. Installing..."
+        echo -e "${YELLOW}gpu-burn not found. Installing...${NC}"
         git clone https://github.com/wilicc/gpu-burn.git $HOME/gpu-burn
         cd $HOME/gpu-burn
         make
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}gpu-burn installed successfully.${NC}"
+        else
+            echo -e "${RED}Failed to install gpu-burn.${NC}"
+        fi
     else
-        echo "gpu-burn already installed."
+        echo -e "${GREEN}gpu-burn already installed.${NC}"
     fi
 }
 
 # Function to install required packages
 install_required_packages() {
-    echo "Checking and installing required packages..."
+    echo -e "${BLUE}Checking and installing required packages...${NC}"
 
     # Update package list
     sudo apt-get update
@@ -47,7 +64,7 @@ install_required_packages() {
     install_tool "glmark2" "glmark2"
     install_gpu_burn
 
-    echo "All required packages are installed."
+    echo -e "${GREEN}All required packages are installed.${NC}"
 }
 
 # Create a report file
@@ -55,79 +72,83 @@ REPORT_FILE="$HOME/Desktop/system_report.txt"
 
 # Function to check CPU status and perform stress test for 1 hour
 check_cpu() {
-    echo "===== CPU INFO =====" | tee -a $REPORT_FILE
+    echo -e "${BLUE}===== CPU INFO =====${NC}" | tee -a $REPORT_FILE
     lscpu | tee -a $REPORT_FILE
-    echo "Starting CPU stress test for 1 hour..." | tee -a $REPORT_FILE
+    echo -e "${YELLOW}Starting CPU stress test for 1 hour...${NC}" | tee -a $REPORT_FILE
     sudo stress-ng --cpu 4 --timeout 3600 | tee -a $REPORT_FILE
-    echo "CPU stress test completed." | tee -a $REPORT_FILE
+    echo -e "${GREEN}CPU stress test completed.${NC}" | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
 # Function to check GPU status and perform stress test for 1 hour
 check_gpu() {
-    echo "===== GPU INFO =====" | tee -a $REPORT_FILE
+    echo -e "${BLUE}===== GPU INFO =====${NC}" | tee -a $REPORT_FILE
     lspci | grep -E "VGA|3D" | tee -a $REPORT_FILE
     
     # First, try using glmark2 for GPU stress testing
     if command -v glmark2 &> /dev/null; then
-        echo "Starting GPU stress test with glmark2 for 1 hour..." | tee -a $REPORT_FILE
+        echo -e "${YELLOW}Starting GPU stress test with glmark2 for 1 hour...${NC}" | tee -a $REPORT_FILE
         glmark2 --run-for=3600 | tee -a $REPORT_FILE
     else
         # If glmark2 fails, try using gpu-burn for CUDA GPUs
         if command -v nvidia-smi &> /dev/null; then
-            echo "CUDA GPU detected. Starting GPU stress test with gpu-burn for 1 hour..." | tee -a $REPORT_FILE
+            echo -e "${YELLOW}CUDA GPU detected. Starting GPU stress test with gpu-burn for 1 hour...${NC}" | tee -a $REPORT_FILE
             cd $HOME/gpu-burn && ./gpu_burn 3600 | tee -a $REPORT_FILE
         else
             # Fall back to stress-ng for basic GPU stress if CUDA is not available
-            echo "glmark2 and CUDA tools not available. Starting GPU stress test with stress-ng..." | tee -a $REPORT_FILE
+            echo -e "${YELLOW}glmark2 and CUDA tools not available. Starting GPU stress test with stress-ng...${NC}" | tee -a $REPORT_FILE
             sudo stress-ng --gpu 4 --timeout 3600 | tee -a $REPORT_FILE
         fi
     fi
-    echo "GPU stress test completed." | tee -a $REPORT_FILE
+    echo -e "${GREEN}GPU stress test completed.${NC}" | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
 # Function to check RAM status and perform stress test for 1 hour
 check_ram() {
-    echo "===== RAM INFO =====" | tee -a $REPORT_FILE
+    echo -e "${BLUE}===== RAM INFO =====${NC}" | tee -a $REPORT_FILE
     free -h | tee -a $REPORT_FILE
-    echo "Starting RAM stress test for 1 hour..." | tee -a $REPORT_FILE
+    echo -e "${YELLOW}Starting RAM stress test for 1 hour...${NC}" | tee -a $REPORT_FILE
     sudo stress-ng --vm 2 --vm-bytes 80% --timeout 3600 | tee -a $REPORT_FILE
-    echo "RAM stress test completed." | tee -a $REPORT_FILE
+    echo -e "${GREEN}RAM stress test completed.${NC}" | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
 # Function to check SSD health and perform stress test for 1 hour
 check_ssd() {
-    echo "===== SSD HEALTH =====" | tee -a $REPORT_FILE
+    echo -e "${BLUE}===== SSD HEALTH =====${NC}" | tee -a $REPORT_FILE
     for disk in $(lsblk -nd -o NAME); do
         sudo smartctl -H /dev/$disk | tee -a $REPORT_FILE
     done
-    echo "Starting SSD stress test for 1 hour using fio..." | tee -a $REPORT_FILE
+    echo -e "${YELLOW}Starting SSD stress test for 1 hour using fio...${NC}" | tee -a $REPORT_FILE
     sudo fio --name=randwrite --ioengine=libaio --iodepth=1 --rw=randwrite --bs=4k --direct=1 --size=1G --numjobs=4 --runtime=3600 --group_reporting | tee -a $REPORT_FILE
-    echo "SSD stress test completed." | tee -a $REPORT_FILE
+    echo -e "${GREEN}SSD stress test completed.${NC}" | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
 # Function to check motherboard information (no stress test available for motherboard)
 check_motherboard() {
-    echo "===== MOTHERBOARD INFO =====" | tee -a $REPORT_FILE
+    echo -e "${BLUE}===== MOTHERBOARD INFO =====${NC}" | tee -a $REPORT_FILE
     sudo dmidecode -t baseboard | tee -a $REPORT_FILE
-    echo "Motherboard stability cannot be stressed directly, but the overall system test covers it." | tee -a $REPORT_FILE
+    echo -e "${YELLOW}Motherboard stability cannot be stressed directly, but the overall system test covers it.${NC}" | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
 # Function to convert the report to a PDF and save it on the Desktop
 generate_pdf_report() {
     PDF_FILE="$HOME/Desktop/system_report.pdf"
-    echo "Generating PDF report..."
+    echo -e "${YELLOW}Generating PDF report...${NC}"
     enscript $REPORT_FILE -o - | ps2pdf - $PDF_FILE
-    echo "Report saved as $PDF_FILE"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Report saved as $PDF_FILE${NC}"
+    else
+        echo -e "${RED}Failed to generate PDF report.${NC}"
+    fi
 }
 
 # Main function to perform all checks and stress tests
 main() {
-    echo "Starting system health and stability check..."
+    echo -e "${BLUE}Starting system health and stability check...${NC}"
 
     # Install necessary packages if missing
     install_required_packages
@@ -142,7 +163,7 @@ main() {
     # Generate PDF report
     generate_pdf_report
 
-    echo "System health and stability check completed."
+    echo -e "${GREEN}System health and stability check completed.${NC}"
 }
 
 # Execute the main function
