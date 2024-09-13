@@ -47,13 +47,7 @@ sudo apt install minicom -y
 echo "Configuring Minicom..."
 sudo minicom -s
 
-# Step 7: Activate network (One-time setup)
-echo "Starting minicom for modem configuration..."
-sudo minicom -D /dev/ttyUSB2 <<EOF
-AT+QCFG="usbnet",3
-AT+QNETDEVCTL=2,3,1
-AT+CFUN=1,1
-EOF
+
 
 # Step 8: Check for network connectivity
 echo "Checking for network connectivity..."
