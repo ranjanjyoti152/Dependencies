@@ -12,6 +12,18 @@ install_tool() {
     fi
 }
 
+# Function to install GPU-Burn (for CUDA GPUs)
+install_gpu_burn() {
+    if [ ! -d "$HOME/gpu-burn" ]; then
+        echo "gpu-burn not found. Installing..."
+        git clone https://github.com/wilicc/gpu-burn.git $HOME/gpu-burn
+        cd $HOME/gpu-burn
+        make
+    else
+        echo "gpu-burn already installed."
+    fi
+}
+
 # Function to install required packages
 install_required_packages() {
     echo "Checking and installing required packages..."
@@ -28,9 +40,12 @@ install_required_packages() {
     install_tool "lspci" "pciutils"
     install_tool "stress-ng" "stress-ng"
     install_tool "fio" "fio"
-    install_tool "glmark2" "glmark2"
     install_tool "enscript" "enscript"
     install_tool "ps2pdf" "ghostscript"
+
+    # Check for glmark2 or fall back to stress-ng for GPU testing
+    install_tool "glmark2" "glmark2"
+    install_gpu_burn
 
     echo "All required packages are installed."
 }
@@ -52,9 +67,23 @@ check_cpu() {
 check_gpu() {
     echo "===== GPU INFO =====" | tee -a $REPORT_FILE
     lspci | grep -E "VGA|3D" | tee -a $REPORT_FILE
-    echo "Starting GPU stress test with glmark2 for 1 hour..." | tee -a $REPORT_FILE
-    glmark2 --run-for=3600 | tee -a $REPORT_FILE
-    echo "GPU stress test completed. Press Ctrl+C to stop the GPU test early if needed." | tee -a $REPORT_FILE
+    
+    # First, try using glmark2 for GPU stress testing
+    if command -v glmark2 &> /dev/null; then
+        echo "Starting GPU stress test with glmark2 for 1 hour..." | tee -a $REPORT_FILE
+        glmark2 --run-for=3600 | tee -a $REPORT_FILE
+    else
+        # If glmark2 fails, try using gpu-burn for CUDA GPUs
+        if command -v nvidia-smi &> /dev/null; then
+            echo "CUDA GPU detected. Starting GPU stress test with gpu-burn for 1 hour..." | tee -a $REPORT_FILE
+            cd $HOME/gpu-burn && ./gpu_burn 3600 | tee -a $REPORT_FILE
+        else
+            # Fall back to stress-ng for basic GPU stress if CUDA is not available
+            echo "glmark2 and CUDA tools not available. Starting GPU stress test with stress-ng..." | tee -a $REPORT_FILE
+            sudo stress-ng --gpu 4 --timeout 3600 | tee -a $REPORT_FILE
+        fi
+    fi
+    echo "GPU stress test completed." | tee -a $REPORT_FILE
     echo "" | tee -a $REPORT_FILE
 }
 
