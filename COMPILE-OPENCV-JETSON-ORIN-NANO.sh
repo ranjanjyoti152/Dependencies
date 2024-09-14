@@ -6,7 +6,12 @@ sudo apt-get upgrade -y
 sudo apt-get install -y build-essential cmake git libgtk2.0-dev pkg-config \
                        libavcodec-dev libavformat-dev libswscale-dev python3-dev \
                        python3-numpy libtbb2 libtbb-dev libjpeg-dev libpng-dev \
-                       libtiff-dev libdc1394-22-dev
+                       libtiff-dev libdc1394-22-dev libopenjp2-7-dev \
+                       libxvidcore-dev libx264-dev libv4l-dev v4l-utils \
+                       python3-matplotlib libhdf5-dev libhdf5-serial-dev \
+                       libhdf5-103 libqtgui4 libqtwebkit4 libqt4-test \
+                       libatlas-base-dev gfortran libprotoc-dev protobuf-compiler \
+                       libgoogle-glog-dev libgflags-dev
 
 # Set OpenCV version (you can change this to the version you need)
 OPENCV_VERSION=4.5.5
@@ -22,7 +27,7 @@ git checkout $OPENCV_VERSION
 
 # Create build directory
 cd ~/opencv
-mkdir build
+mkdir -p build
 cd build
 
 # Configure the build with CMake and enable CUDA
@@ -40,9 +45,13 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
       -D BUILD_opencv_python2=OFF \
       -D BUILD_TESTS=OFF \
       -D BUILD_PERF_TESTS=OFF \
-      -D BUILD_EXAMPLES=OFF ..
+      -D BUILD_EXAMPLES=OFF \
+      -D WITH_OPENGL=ON \
+      -D WITH_GSTREAMER=ON \
+      -D WITH_OPENMP=ON \
+      -D WITH_TBB=ON ..
 
-# Compile OpenCV (you can adjust the -j flag depending on the number of CPU cores)
+# Compile OpenCV (adjust the -j flag based on the number of CPU cores)
 make -j$(nproc)
 
 # Install OpenCV
