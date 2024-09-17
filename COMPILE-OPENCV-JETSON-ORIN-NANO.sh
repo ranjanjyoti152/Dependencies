@@ -7,7 +7,7 @@ install_opencv () {
       model=$(tr -d '\0' < /proc/device-tree/model)
       # Check if the model information contains "Jetson Nano Orion"
       echo ""
-      if [[ $model == *"Orin Nano"* ]]; then
+      if [[ $model == *"Orin"* ]]; then
           echo "Detecting a Jetson Nano Orin."
 	  # Use always "-j 4"
           NO_JOB=4
@@ -35,9 +35,9 @@ install_opencv () {
       exit 1
   fi
   
-  echo "Installing OpenCV 4.6.0 on your Nano"
-  echo "It will take 3 hours !"
-
+  echo "Installing OpenCV 4.9.0 on your Nano"
+  echo "It will take 3.5 hours !"
+  
   # reveal the CUDA location
   cd ~
   sudo sh -c "echo '/usr/local/cuda/lib64' >> /etc/ld.so.conf.d/nvidia-tegra.conf"
@@ -47,11 +47,27 @@ install_opencv () {
   if [[ $model == *"Jetson Nano"* ]]; then
     sudo apt-get install -y build-essential git unzip pkg-config zlib1g-dev
     sudo apt-get install -y python3-dev python3-numpy
-    sudo apt-get install -y python-dev python-numpy python-pip
+    sudo apt-get install -y python-dev python-numpy
     sudo apt-get install -y gstreamer1.0-tools libgstreamer-plugins-base1.0-dev
     sudo apt-get install -y libgstreamer-plugins-good1.0-dev
     sudo apt-get install -y libtbb2 libgtk-3-dev v4l2ucp libxine2-dev
   fi
+  
+  if [ -f /etc/os-release ]; then
+      # Source the /etc/os-release file to get variables
+      . /etc/os-release
+      # Extract the major version number from VERSION_ID
+      VERSION_MAJOR=$(echo "$VERSION_ID" | cut -d'.' -f1)
+      # Check if the extracted major version is 22 or earlier
+      if [ "$VERSION_MAJOR" = "22" ]; then
+          sudo apt-get install -y libswresample-dev libdc1394-dev
+      else
+	  sudo apt-get install -y libavresample-dev libdc1394-22-dev
+      fi
+  else
+      sudo apt-get install -y libavresample-dev libdc1394-22-dev
+  fi
+
   # install the common dependencies
   sudo apt-get install -y cmake
   sudo apt-get install -y libjpeg-dev libjpeg8-dev libjpeg-turbo8-dev
@@ -60,10 +76,10 @@ install_opencv () {
   sudo apt-get install -y libgtk2.0-dev libgtk-3-dev libcanberra-gtk*
   sudo apt-get install -y python3-pip
   sudo apt-get install -y libxvidcore-dev libx264-dev
-  sudo apt-get install -y libtbb-dev libdc1394-22-dev libxine2-dev
+  sudo apt-get install -y libtbb-dev libxine2-dev
   sudo apt-get install -y libv4l-dev v4l-utils qv4l2
   sudo apt-get install -y libtesseract-dev libpostproc-dev
-  sudo apt-get install -y libavresample-dev libvorbis-dev
+  sudo apt-get install -y libvorbis-dev
   sudo apt-get install -y libfaac-dev libmp3lame-dev libtheora-dev
   sudo apt-get install -y libopencore-amrnb-dev libopencore-amrwb-dev
   sudo apt-get install -y libopenblas-dev libatlas-base-dev libblas-dev
@@ -75,18 +91,8 @@ install_opencv () {
   cd ~ 
   sudo rm -rf opencv*
   # download the latest version
-  wget -O opencv.zip https://github.com/opencv/opencv/archive/4.6.0.zip 
-  wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.6.0.zip 
-  # unpack
-  unzip opencv.zip 
-  unzip opencv_contrib.zip 
-  # some administration to make live easier later on
-  mv opencv-4.6.0 opencv
-  mv opencv_contrib-4.6.0 opencv_contrib
-  # clean up the zip files
-  rm opencv.zip
-  rm opencv_contrib.zip
-
+  git clone --depth=1 https://github.com/opencv/opencv.git
+  git clone --depth=1 https://github.com/opencv/opencv_contrib.git
   
   # set install dir
   cd ~/opencv
@@ -125,10 +131,12 @@ install_opencv () {
   -D INSTALL_PYTHON_EXAMPLES=OFF \
   -D PYTHON3_PACKAGES_PATH=/usr/lib/python3/dist-packages \
   -D OPENCV_GENERATE_PKGCONFIG=ON \
-  -D BUILD_EXAMPLES=OFF ..
+  -D BUILD_EXAMPLES=OFF \
+  -D CMAKE_CXX_FLAGS="-march=native -mtune=native" \
+  -D CMAKE_C_FLAGS="-march=native -mtune=native" ..
  
   make -j ${NO_JOB} 
-
+  
   directory="/usr/include/opencv4/opencv2"
   if [ -d "$directory" ]; then
     # Directory exists, so delete it
@@ -143,7 +151,7 @@ install_opencv () {
   sudo apt-get update
   
   echo "Congratulations!"
-  echo "You've successfully installed OpenCV 4.6.0 on Nano"
+  echo "You've successfully installed OpenCV 4.9.0 on your Nano"
 }
 
 cd ~
