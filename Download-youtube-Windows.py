@@ -2,23 +2,12 @@ import os
 import shutil
 import yt_dlp
 from datetime import datetime, timedelta
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
 
-# Function to clean up folders older than 3 days
-def clean_old_folders(base_path, days=3):
-    cutoff_date = datetime.now() - timedelta(days=days)
-    for folder in os.listdir(base_path):
-        folder_path = os.path.join(base_path, folder)
-        if os.path.isdir(folder_path):
-            try:
-                folder_date = datetime.strptime(folder, '%Y-%m-%d')
-                if folder_date < cutoff_date:
-                    shutil.rmtree(folder_path)
-                    print(f"Deleted old folder: {folder_path}")
-            except ValueError:
-                print(f"Skipping non-date folder: {folder_path}")
 
 # Function to download YouTube video or audio using yt-dlp
-def download_best_format(url, base_path='C:\\yt-videos', file_type='video'):
+def download_best_format(url, base_path, file_type, output_box):
     # Create base directory if it doesn't exist
     if not os.path.exists(base_path):
         os.makedirs(base_path)
@@ -27,9 +16,6 @@ def download_best_format(url, base_path='C:\\yt-videos', file_type='video'):
     today = datetime.now().strftime('%Y-%m-%d')
     save_path = os.path.join(base_path, today)
     os.makedirs(save_path, exist_ok=True)
-
-    # Clean up old folders (Removed for your request)
-    # clean_old_folders(base_path)
 
     # yt-dlp options
     ydl_opts = {
@@ -43,49 +29,48 @@ def download_best_format(url, base_path='C:\\yt-videos', file_type='video'):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
             if 'entries' in info_dict:  # This means it is a playlist
-                print(f"Detected a playlist with {len(info_dict['entries'])} videos.")
-                download_choice = input("Do you want to download the entire playlist? (yes/no): ").strip().lower()
-
-                if download_choice == 'yes':
+                messagebox.showinfo("Playlist Detected", f"Detected a playlist with {len(info_dict['entries'])} videos.")
+                download_choice = messagebox.askyesno("Download Playlist", "Do you want to download the entire playlist?")
+                if download_choice:
                     ydl.download([url])
-                    print(f"Downloaded playlist successfully to {save_path}")
+                    output_box.insert(tk.END, f"Downloaded playlist successfully to {save_path}\n")
                     return
                 else:
                     # List individual videos for user to choose
-                    for idx, entry in enumerate(info_dict['entries'], 1):
-                        print(f"{idx}. {entry['title']}")
-
-                    video_index = int(input("Enter the number of the video you want to download: ")) - 1
-                    video_url = info_dict['entries'][video_index]['url']
-                    print(f"Downloading video: {info_dict['entries'][video_index]['title']}")
-                    ydl.download([video_url])
+                    videos = [entry['title'] for entry in info_dict['entries']]
+                    video_list = "\n".join([f"{idx + 1}. {title}" for idx, title in enumerate(videos)])
+                    choice = tk.simpledialog.askinteger("Select Video", f"Available videos:\n{video_list}\nEnter video number:")
+                    if choice and 0 < choice <= len(info_dict['entries']):
+                        video_url = info_dict['entries'][choice - 1]['url']
+                        output_box.insert(tk.END, f"Downloading video: {info_dict['entries'][choice - 1]['title']}\n")
+                        ydl.download([video_url])
+                    else:
+                        messagebox.showwarning("Invalid Choice", "No valid video selected.")
                     return
 
             formats = info_dict.get('formats', [])
             if not formats:
-                print("No formats available for this video.")
+                output_box.insert(tk.END, "No formats available for this video.\n")
                 return
 
             # Filter formats based on the file type
-            if file_type == 'video':
+            if file_type == 'Video':
                 formats = [f for f in formats if f.get('vcodec') != 'none']  # Only video formats
-            elif file_type == 'audio':
+            elif file_type == 'Audio':
                 formats = [f for f in formats if f.get('acodec') != 'none']  # Only audio formats
             else:
-                print("Invalid file type. Please choose 'video' or 'audio'.")
+                output_box.insert(tk.END, "Invalid file type. Please choose 'Video' or 'Audio'.\n")
                 return
 
             # Display available formats
-            print("Available formats:")
-            for i, f in enumerate(formats):
-                quality = f.get('format_note', 'Quality not specified')
-                resolution = f.get('resolution', 'No resolution')
-                ext = f.get('ext', '')
-                print(f"{i + 1}: {quality} {resolution} - {ext}")
+            format_list = [f"{i + 1}: {f.get('format_note', 'Quality not specified')} {f.get('resolution', 'No resolution')} - {f.get('ext', '')}" for i, f in enumerate(formats)]
+            format_list_str = "\n".join(format_list)
+            choice = tk.simpledialog.askinteger("Select Format", f"Available formats:\n{format_list_str}\nChoose the format number:")
+            if not choice or choice <= 0 or choice > len(formats):
+                output_box.insert(tk.END, "Invalid format choice.\n")
+                return
 
-            # Ask user to choose format
-            choice = int(input("Choose the format by entering the number: ")) - 1
-            chosen_format = formats[choice]['format_id']
+            chosen_format = formats[choice - 1]['format_id']
 
             # Update options for the chosen format
             ydl_opts['format'] = chosen_format
@@ -94,21 +79,53 @@ def download_best_format(url, base_path='C:\\yt-videos', file_type='video'):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        print(f"Downloaded successfully to {save_path}")
+        output_box.insert(tk.END, f"Downloaded successfully to {save_path}\n")
 
     except Exception as e:
-        print(f"Error: {e}")
+        output_box.insert(tk.END, f"Error: {e}\n")
 
-# Example usage
+
+# GUI Setup
+def setup_gui():
+    root = tk.Tk()
+    root.title("YouTube Downloader")
+    root.geometry("600x400")
+
+    # URL Entry
+    ttk.Label(root, text="YouTube URL:").grid(row=0, column=0, padx=10, pady=10, sticky=tk.W)
+    url_entry = ttk.Entry(root, width=50)
+    url_entry.grid(row=0, column=1, padx=10, pady=10, sticky=tk.W)
+
+    # File Type Selection
+    ttk.Label(root, text="File Type:").grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
+    file_type_combo = ttk.Combobox(root, values=["Video", "Audio"], state="readonly")
+    file_type_combo.current(0)  # Default to "Video"
+    file_type_combo.grid(row=1, column=1, padx=10, pady=10, sticky=tk.W)
+
+    # Output Text Box
+    output_box = scrolledtext.ScrolledText(root, width=70, height=15, wrap=tk.WORD)
+    output_box.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+    # Base Path for Downloads
+    base_path = os.path.join(os.getcwd(), 'downloads')  # Default to 'downloads' in the current working directory
+
+    # Download Button
+    def start_download():
+        url = url_entry.get().strip()
+        file_type = file_type_combo.get()
+        if not url:
+            messagebox.showwarning("Input Error", "Please enter a valid YouTube URL.")
+            return
+        output_box.insert(tk.END, f"Starting download for {url} as {file_type}...\n")
+        output_box.see(tk.END)  # Scroll to the end of the output box
+        download_best_format(url, base_path, file_type, output_box)
+
+    download_button = ttk.Button(root, text="Download", command=start_download)
+    download_button.grid(row=2, column=0, columnspan=2, pady=10)
+
+    root.mainloop()
+
+
+# Run the GUI application
 if __name__ == "__main__":
-    while True:
-        try:
-            video_url = input("Enter the YouTube video or playlist URL: ")
-            file_type = input("Enter the file type you want to download (video/audio): ").strip().lower()
-
-            # Download based on the selected file type
-            download_best_format(video_url, file_type=file_type)
-
-        except KeyboardInterrupt:
-            print("\nExiting the program.")
-            break  # Exit the loop on Ctrl+C
+    setup_gui()
