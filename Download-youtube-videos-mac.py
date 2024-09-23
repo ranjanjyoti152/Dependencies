@@ -3,6 +3,7 @@ import yt_dlp
 from datetime import datetime
 from tqdm import tqdm
 from colorama import Fore, init
+import glob
 
 # Initialize colorama
 init(autoreset=True)
@@ -32,6 +33,12 @@ def progress_hook(d):
             progress_bar.close()
         progress_bar = None
         print(f"{Fore.CYAN}\nDownload completed: {d['filename']}")
+
+# Function to delete all .webm files in the directory
+def delete_webm_files(directory):
+    for webm_file in glob.glob(os.path.join(directory, '*.webm')):
+        os.remove(webm_file)
+        print(f"{Fore.RED}Deleted: {webm_file}")
 
 # Function to download YouTube video or audio using yt-dlp
 def download_best_format(url, base_path=os.path.expanduser('~/Desktop/Youtube Downloads'), file_type='video'):
@@ -66,6 +73,7 @@ def download_best_format(url, base_path=os.path.expanduser('~/Desktop/Youtube Do
                 if download_choice == 'yes':
                     ydl.download([url])
                     print(f"{Fore.GREEN}Downloaded playlist successfully to {save_path}")
+                    delete_webm_files(save_path)  # Delete .webm files after downloading
                     return
                 else:
                     # List individual videos for user to choose
@@ -76,6 +84,7 @@ def download_best_format(url, base_path=os.path.expanduser('~/Desktop/Youtube Do
                     video_url = info_dict['entries'][video_index]['url']
                     print(f"{Fore.GREEN}Downloading video: {info_dict['entries'][video_index]['title']}")
                     ydl.download([video_url])
+                    delete_webm_files(save_path)  # Delete .webm files after downloading
                     return
 
             formats = info_dict.get('formats', [])
@@ -127,6 +136,9 @@ def download_best_format(url, base_path=os.path.expanduser('~/Desktop/Youtube Do
 
     except Exception as e:
         print(f"{Fore.RED}Error: {e}")
+    finally:
+        # Delete .webm files after processing
+        delete_webm_files(save_path)
 
 # Example usage
 if __name__ == "__main__":
