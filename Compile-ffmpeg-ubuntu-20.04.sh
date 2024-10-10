@@ -47,14 +47,14 @@ git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg
 cd ffmpeg
 git checkout $FFMPEG_VERSION
 
-# Configure FFmpeg with NVIDIA support
+# Configure FFmpeg with NVIDIA support (CUDA 12.2 paths)
 print_message "info" "Configuring FFmpeg with NVIDIA support..."
 ./configure \
   --prefix=/usr/local \
   --enable-cuda-nvcc \
   --enable-libnpp \
-  --extra-cflags=-I/usr/local/cuda/include \
-  --extra-ldflags=-L/usr/local/cuda/lib64 \
+  --extra-cflags=-I/usr/local/cuda-12.2/include \
+  --extra-ldflags=-L/usr/local/cuda-12.2/lib64 \
   --enable-nonfree \
   --enable-libfdk-aac \
   --enable-libass \
