@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Script to install PyTorch and torchvision on JetPack 5.1.2
-# Includes manual fallback if NVIDIA-specific versions are unavailable.
+# Script to install PyTorch on JetPack 5.1.2 using NVIDIA-provided wheel file.
 
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -41,41 +40,48 @@ if ! pip install --upgrade pip; then
   exit 1
 fi
 
-# Define URLs for PyTorch and torchvision
+# Define the URL for the PyTorch wheel
 TORCH_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl"
-TORCHVISION_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/torchvision/torchvision-0.15.2+nv23.06-cp38-cp38-linux_aarch64.whl"
 
-# Attempt to install PyTorch and torchvision from NVIDIA repository
-echo "Attempting to install PyTorch and torchvision from NVIDIA repository..."
-if ! pip install "$TORCH_WHEEL_URL" "$TORCHVISION_WHEEL_URL"; then
-  echo "Warning: Failed to install from NVIDIA repository. Falling back to manual installation..."
-
-  # Download PyTorch and torchvision wheel files manually
-  echo "Downloading PyTorch and torchvision wheels..."
-  wget -q --show-progress "$TORCH_WHEEL_URL" -O torch.whl
-  wget -q --show-progress "$TORCHVISION_WHEEL_URL" -O torchvision.whl
-
-  # Validate downloaded wheel files
-  if [[ ! -f "torch.whl" || ! -f "torchvision.whl" ]]; then
-    echo "Error: Failed to download wheel files. Please check the URLs." >&2
-    exit 1
-  fi
-
-  echo "Installing downloaded wheels..."
-  if ! pip install torch.whl torchvision.whl; then
-    echo "Error: Failed to install PyTorch or torchvision from downloaded wheel files." >&2
-    exit 1
-  fi
-
-  # Cleanup downloaded files
-  rm -f torch.whl torchvision.whl
+# Install PyTorch directly from the NVIDIA wheel URL
+echo "Installing PyTorch from NVIDIA wheel..."
+if ! pip install "$TORCH_WHEEL_URL"; then
+  echo "Error: Failed to install PyTorch from the NVIDIA wheel URL." >&2
+  exit 1
 fi
 
-# Verify the installation
-echo "Verifying PyTorch and torchvision installation..."
-if ! python3 -c "import torch; print('PyTorch version:', torch.__version__)" || \
-   ! python3 -c "import torchvision; print('torchvision version:', torchvision.__version__)"; then
-  echo "Error: Verification failed. PyTorch or torchvision might not be installed correctly." >&2
+# Install torchvision (latest version compatible with installed PyTorch)
+echo "Installing torchvision..."
+if ! pip install torchvision; then
+  echo "Error: Failed to install torchvision. Please ensure compatibility with the installed PyTorch version." >&2
+  exit 1
+fi
+
+# Verify PyTorch installation
+echo "Verifying PyTorch installation..."
+if ! python3 -c "import torch; print('PyTorch version:', torch.__version__)"; then
+  echo "Error: Verification failed. PyTorch might not be installed correctly." >&2
+  exit 1
+fi
+
+# Verify torchvision installation
+echo "Verifying torchvision installation..."
+if ! python3 -c "import torchvision; print('torchvision version:', torchvision.__version__)"; then
+  echo "Error: Verification failed. torchvision might not be installed correctly." >&2
+  exit 1
+fi
+
+# Test PyTorch GPU availability
+echo "Testing PyTorch GPU availability..."
+if ! python3 -c "import torch; print('CUDA is available:', torch.cuda.is_available())"; then
+  echo "Error: Failed to test CUDA availability. PyTorch may not be configured correctly for GPU usage." >&2
+  exit 1
+fi
+
+# Test torchvision functionality
+echo "Testing torchvision functionality..."
+if ! python3 -c "from torchvision import transforms; print('torchvision.transforms is available:', transforms is not None)"; then
+  echo "Error: Failed to test torchvision functionality." >&2
   exit 1
 fi
 
@@ -93,13 +99,15 @@ echo "Virtual environment activation script added to '$PROFILE_FILE'."
 # Completion message
 cat <<EOF
 
-Installation and automation complete!
+Installation complete!
 
 The virtual environment will be activated automatically on login.
 
 To manually activate the virtual environment:
 1. Run: source $VENV_DIR/bin/activate
 2. To deactivate, run: deactivate
+
+PyTorch and torchvision installation verified successfully!
 
 EOF
 exit 0
