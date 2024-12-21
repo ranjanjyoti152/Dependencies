@@ -41,10 +41,11 @@ if ! pip install --upgrade pip; then
   exit 1
 fi
 
-# Attempt to install PyTorch and torchvision from NVIDIA repository
+# Define URLs for PyTorch and torchvision
 TORCH_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl"
-TORCHVISION_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v51/torchvision-0.14.0+nv22.09-cp38-cp38-linux_aarch64.whl"
+TORCHVISION_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/torchvision/torchvision-0.15.2+nv23.06-cp38-cp38-linux_aarch64.whl"
 
+# Attempt to install PyTorch and torchvision from NVIDIA repository
 echo "Attempting to install PyTorch and torchvision from NVIDIA repository..."
 if ! pip install "$TORCH_WHEEL_URL" "$TORCHVISION_WHEEL_URL"; then
   echo "Warning: Failed to install from NVIDIA repository. Falling back to manual installation..."
@@ -53,6 +54,12 @@ if ! pip install "$TORCH_WHEEL_URL" "$TORCHVISION_WHEEL_URL"; then
   echo "Downloading PyTorch and torchvision wheels..."
   wget -q --show-progress "$TORCH_WHEEL_URL" -O torch.whl
   wget -q --show-progress "$TORCHVISION_WHEEL_URL" -O torchvision.whl
+
+  # Validate downloaded wheel files
+  if [[ ! -f "torch.whl" || ! -f "torchvision.whl" ]]; then
+    echo "Error: Failed to download wheel files. Please check the URLs." >&2
+    exit 1
+  fi
 
   echo "Installing downloaded wheels..."
   if ! pip install torch.whl torchvision.whl; then
