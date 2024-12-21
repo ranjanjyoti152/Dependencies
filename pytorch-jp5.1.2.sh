@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to install PyTorch and torchvision on JetPack 5.1.2
-# Automates virtual environment activation on startup
+# Includes manual fallback if NVIDIA-specific versions are unavailable.
 
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -18,7 +18,7 @@ fi
 
 # Install required dependencies
 echo "Installing dependencies..."
-if ! apt install -y python3-pip python3-dev python3-venv libopenblas-dev libopenmpi-dev libomp-dev; then
+if ! apt install -y python3-pip python3-dev python3-venv libopenblas-dev libopenmpi-dev libomp-dev wget; then
   echo "Error: Failed to install required dependencies." >&2
   exit 1
 fi
@@ -41,14 +41,27 @@ if ! pip install --upgrade pip; then
   exit 1
 fi
 
-# Install PyTorch and torchvision
-TORCH_VERSION="1.13.0+nv22.09"
+# Attempt to install PyTorch and torchvision from NVIDIA repository
+TORCH_VERSION="2.1.0a0+41361538.nv23.06"
 TORCHVISION_VERSION="0.14.0+nv22.09"
-NVIDIA_REPO_URL="https://developer.download.nvidia.com/compute/redist/jp/v51"
-echo "Installing PyTorch ($TORCH_VERSION) and torchvision ($TORCHVISION_VERSION)..."
+NVIDIA_REPO_URL="https://developer.download.nvidia.com/compute/redist/jp/v512"
+echo "Attempting to install PyTorch ($TORCH_VERSION) and torchvision ($TORCHVISION_VERSION) from NVIDIA repository..."
 if ! pip install "torch==$TORCH_VERSION" "torchvision==$TORCHVISION_VERSION" --extra-index-url "$NVIDIA_REPO_URL"; then
-  echo "Error: Failed to install PyTorch or torchvision." >&2
-  exit 1
+  echo "Warning: Failed to install from NVIDIA repository. Falling back to manual installation..."
+
+  # Download PyTorch and torchvision wheel files manually
+  echo "Downloading PyTorch and torchvision wheels..."
+  wget -q --show-progress "$NVIDIA_REPO_URL/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl" -O torch.whl
+  wget -q --show-progress "https://developer.download.nvidia.com/compute/redist/jp/v51/torchvision-0.14.0+nv22.09-cp38-cp38-linux_aarch64.whl" -O torchvision.whl
+
+  echo "Installing downloaded wheels..."
+  if ! pip install torch.whl torchvision.whl; then
+    echo "Error: Failed to install PyTorch or torchvision from downloaded wheel files." >&2
+    exit 1
+  fi
+
+  # Cleanup downloaded files
+  rm -f torch.whl torchvision.whl
 fi
 
 # Verify the installation
