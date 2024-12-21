@@ -16,12 +16,13 @@ if ! apt update && apt upgrade -y; then
 fi
 
 # Check CUDA version
-echo "Checking CUDA version..."
-if [ ! -f /usr/local/cuda/version.txt ]; then
-  echo "Error: CUDA is not installed or /usr/local/cuda/version.txt is missing." >&2
+CUDA_VERSION_FILE="/usr/local/cuda/version.json"
+if [ ! -f "$CUDA_VERSION_FILE" ]; then
+  echo "Error: CUDA is not installed or $CUDA_VERSION_FILE is missing." >&2
   exit 1
 fi
-CUDA_VERSION=$(cat /usr/local/cuda/version.txt | grep -oP '[0-9]+\.[0-9]+')
+
+CUDA_VERSION=$(cat "$CUDA_VERSION_FILE" | grep -oP '"version":\s*"\K[0-9]+\.[0-9]+')
 if [[ "$CUDA_VERSION" != "11.4" ]]; then
   echo "Error: This script requires CUDA 11.4. Detected version: $CUDA_VERSION" >&2
   exit 1
