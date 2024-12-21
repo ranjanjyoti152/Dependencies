@@ -42,17 +42,17 @@ if ! pip install --upgrade pip; then
 fi
 
 # Attempt to install PyTorch and torchvision from NVIDIA repository
-TORCH_VERSION="2.1.0a0+41361538.nv23.06"
-TORCHVISION_VERSION="0.14.0+nv22.09"
-NVIDIA_REPO_URL="https://developer.download.nvidia.com/compute/redist/jp/v512"
-echo "Attempting to install PyTorch ($TORCH_VERSION) and torchvision ($TORCHVISION_VERSION) from NVIDIA repository..."
-if ! pip install "torch==$TORCH_VERSION" "torchvision==$TORCHVISION_VERSION" --extra-index-url "$NVIDIA_REPO_URL"; then
+TORCH_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl"
+TORCHVISION_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v51/torchvision-0.14.0+nv22.09-cp38-cp38-linux_aarch64.whl"
+
+echo "Attempting to install PyTorch and torchvision from NVIDIA repository..."
+if ! pip install "$TORCH_WHEEL_URL" "$TORCHVISION_WHEEL_URL"; then
   echo "Warning: Failed to install from NVIDIA repository. Falling back to manual installation..."
 
   # Download PyTorch and torchvision wheel files manually
   echo "Downloading PyTorch and torchvision wheels..."
-  wget -q --show-progress "$NVIDIA_REPO_URL/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl" -O torch.whl
-  wget -q --show-progress "https://developer.download.nvidia.com/compute/redist/jp/v51/torchvision-0.14.0+nv22.09-cp38-cp38-linux_aarch64.whl" -O torchvision.whl
+  wget -q --show-progress "$TORCH_WHEEL_URL" -O torch.whl
+  wget -q --show-progress "$TORCHVISION_WHEEL_URL" -O torchvision.whl
 
   echo "Installing downloaded wheels..."
   if ! pip install torch.whl torchvision.whl; then
