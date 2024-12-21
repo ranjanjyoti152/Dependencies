@@ -17,7 +17,11 @@ fi
 
 # Check CUDA version
 echo "Checking CUDA version..."
-CUDA_VERSION=$(nvcc --version | grep -oP 'release \K[0-9]+(\.[0-9]+)*')
+if [ ! -f /usr/local/cuda/version.txt ]; then
+  echo "Error: CUDA is not installed or /usr/local/cuda/version.txt is missing." >&2
+  exit 1
+fi
+CUDA_VERSION=$(cat /usr/local/cuda/version.txt | grep -oP '[0-9]+\.[0-9]+')
 if [[ "$CUDA_VERSION" != "11.4" ]]; then
   echo "Error: This script requires CUDA 11.4. Detected version: $CUDA_VERSION" >&2
   exit 1
