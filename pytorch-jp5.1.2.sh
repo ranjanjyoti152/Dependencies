@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Script to install PyTorch and torchvision on JetPack 5.1.2 and automate virtual environment activation on startup
+# Script to install PyTorch and torchvision on JetPack 5.1.2
+# Automates virtual environment activation on startup
 
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -14,20 +15,6 @@ if ! apt update && apt upgrade -y; then
   echo "Error: Failed to update packages. Please check your internet connection." >&2
   exit 1
 fi
-
-# Check CUDA version
-CUDA_VERSION_FILE="/usr/local/cuda/version.json"
-if [ ! -f "$CUDA_VERSION_FILE" ]; then
-  echo "Error: CUDA is not installed or $CUDA_VERSION_FILE is missing." >&2
-  exit 1
-fi
-
-CUDA_VERSION=$(cat "$CUDA_VERSION_FILE" | grep -oP '"version":\s*"\K[0-9]+\.[0-9]+')
-if [[ "$CUDA_VERSION" != "11.4" ]]; then
-  echo "Error: This script requires CUDA 11.4. Detected version: $CUDA_VERSION" >&2
-  exit 1
-fi
-echo "CUDA version $CUDA_VERSION detected. Proceeding..."
 
 # Install required dependencies
 echo "Installing dependencies..."
