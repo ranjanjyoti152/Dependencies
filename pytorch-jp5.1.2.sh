@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install PyTorch on JetPack 5.1.2 using NVIDIA-provided wheel file.
+# Script to install PyTorch on JetPack 5.1.2 using a specific wheel file.
 
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -43,28 +43,42 @@ fi
 # Define the URL for the PyTorch wheel
 TORCH_WHEEL_URL="https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl"
 
-# Install PyTorch directly from the NVIDIA wheel URL
-echo "Installing PyTorch from NVIDIA wheel..."
-if ! pip install "$TORCH_WHEEL_URL"; then
-  echo "Error: Failed to install PyTorch from the NVIDIA wheel URL." >&2
+# Download the PyTorch wheel with the correct filename
+echo "Downloading PyTorch wheel from NVIDIA..."
+if ! wget "$TORCH_WHEEL_URL"; then
+  echo "Error: Failed to download the PyTorch wheel. Please check the URL or your internet connection." >&2
   exit 1
 fi
 
-# Install torchvision (latest version compatible with installed PyTorch)
-echo "Installing torchvision..."
-if ! pip install torchvision; then
-  echo "Error: Failed to install torchvision. Please ensure compatibility with the installed PyTorch version." >&2
+# Get the downloaded filename from the URL
+TORCH_WHEEL_FILE=$(basename "$TORCH_WHEEL_URL")
+
+# Install the PyTorch wheel
+echo "Installing PyTorch..."
+if ! pip install "$TORCH_WHEEL_FILE"; then
+  echo "Error: Failed to install PyTorch from the wheel file." >&2
+  rm -f "$TORCH_WHEEL_FILE"
   exit 1
 fi
 
-# Verify PyTorch installation
+# Cleanup downloaded wheel file
+rm -f "$TORCH_WHEEL_FILE"
+
+# Verify the installation of PyTorch
 echo "Verifying PyTorch installation..."
 if ! python3 -c "import torch; print('PyTorch version:', torch.__version__)"; then
   echo "Error: Verification failed. PyTorch might not be installed correctly." >&2
   exit 1
 fi
 
-# Verify torchvision installation
+# Install torchvision (compatible version)
+echo "Installing torchvision..."
+if ! pip install torchvision; then
+  echo "Error: Failed to install torchvision. Please ensure compatibility with the installed PyTorch version." >&2
+  exit 1
+fi
+
+# Verify the installation of torchvision
 echo "Verifying torchvision installation..."
 if ! python3 -c "import torchvision; print('torchvision version:', torchvision.__version__)"; then
   echo "Error: Verification failed. torchvision might not be installed correctly." >&2
