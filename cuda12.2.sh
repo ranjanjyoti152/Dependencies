@@ -1,7 +1,4 @@
 #!/bin/bash
-sudo apt update
-sudo apt install build-essential -y
-
 
 # Function to print colored messages
 print_info() {
@@ -21,84 +18,97 @@ print_error() {
 }
 
 # Display welcome message
-echo "###############################################################################################################################################"
-echo "##############################                                                                              ###################################"
-echo "##############################                            WELCOME TO PROXPC                                 ###################################"
-echo "##############################                                                                              ###################################"
-echo "###############################################################################################################################################"
+clear
+cat <<EOF
+##############################################################################################################
+##############################                                                                              ###################################
+##############################                            WELCOME TO PROXPC                                 ###################################
+##############################                                                                              ###################################
+##############################################################################################################
+EOF
 
-# Remove unwanted programs and clean up broken packages
-print_info "Removing unwanted programs and cleaning up broken packages..."
-sudo apt -y remove --purge "^libcuda.*" "^cuda.*" "^libnvidia.*" "^nvidia.*" "^tensorrt.*"
-print_success "Unwanted programs removed!"
-
-# Update and upgrade the system
-print_info "Updating package list..."
-sudo apt update
-if [ $? -ne 0 ]; then
-    print_error "Failed to update package list. Exiting script."
-    exit 1
+# Update and upgrade system packages
+print_info "Updating system packages..."
+sudo apt update && sudo apt -y upgrade
+if [ $? -eq 0 ]; then
+    print_success "System updated and upgraded successfully!"
 else
-    print_success "Package list updated successfully!"
+    print_error "Failed to update system packages. Exiting script."
+    exit 1
 fi
 
-print_info "Upgrading installed packages..."
-sudo apt upgrade -y && print_success "Packages upgraded!"
+# Remove unwanted NVIDIA-related packages
+print_info "Removing unnecessary NVIDIA-related packages..."
+sudo apt -y remove --purge "^libcuda.*" "^cuda.*" "^libnvidia.*" "^nvidia.*" "^tensorrt.*"
+print_success "Unwanted NVIDIA-related packages removed!"
 
-# Install necessary packages
-print_info "Installing necessary packages..."
-sudo apt install -y gparted git net-tools openssh-server curl && print_success "Necessary packages installed!"
+# Install build-essential and other necessary packages
+print_info "Installing essential packages..."
+sudo apt install -y build-essential gparted git net-tools openssh-server curl
+if [ $? -eq 0 ]; then
+    print_success "Essential packages installed successfully!"
+else
+    print_error "Failed to install essential packages."
+    exit 1
+fi
 
 # Install SSD benchmark tool
 print_info "Installing SSD benchmark tool..."
-sudo snap install ssd-benchmark && print_success "SSD benchmark tool installed!"
+sudo snap install ssd-benchmark
+print_success "SSD benchmark tool installed!"
 
-# Change desktop wallpaper if GNOME is available
+# Set desktop wallpaper for GNOME users
 if command -v gsettings &> /dev/null; then
-    print_info "Setting desktop wallpaper..."
-    gsettings set org.gnome.desktop.background picture-uri https://raw.githubusercontent.com/ranjanjyoti152/opencvproxpc/main/Wallpaper-01.jpg \
-        && print_success "Wallpaper set!"
+    print_info "Setting GNOME desktop wallpaper..."
+    gsettings set org.gnome.desktop.background picture-uri "https://raw.githubusercontent.com/ranjanjyoti152/opencvproxpc/main/Wallpaper-01.jpg" \
+        && print_success "Wallpaper updated successfully!"
 else
-    print_warning "GNOME not found. Skipping wallpaper setup."
+    print_warning "GNOME not detected. Skipping wallpaper setup."
 fi
 
-# Install NVIDIA drivers
+# Add NVIDIA drivers repository and install drivers
 print_info "Installing NVIDIA drivers..."
-sudo add-apt-repository ppa:graphics-drivers/ppa -y
+sudo add-apt-repository -y ppa:graphics-drivers/ppa
+sudo apt update
 sudo apt install -y nvidia-driver-530
 sudo dpkg --configure -a
 print_success "NVIDIA drivers installed!"
 
 # Install NVIDIA CUDA 12.2
 print_info "Installing NVIDIA CUDA 12.2..."
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
-sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
-wget https://developer.download.nvidia.com/compute/cuda/12.2.0/local_installers/cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
-sudo dpkg -i cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
+CUDA_DEB="cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb"
+wget -q https://developer.download.nvidia.com/compute/cuda/12.2.0/local_installers/$CUDA_DEB
+sudo dpkg -i $CUDA_DEB
 sudo cp /var/cuda-repo-ubuntu2204-12-2-local/cuda-*-keyring.gpg /usr/share/keyrings/
-sudo apt-get update
-sudo apt-get -y install cuda
+sudo apt update
+sudo apt -y install cuda
 print_success "NVIDIA CUDA 12.2 installed!"
+rm -f $CUDA_DEB
 
 # Install cuDNN
 print_info "Installing cuDNN..."
-wget https://developer.download.nvidia.com/compute/cudnn/9.3.0/local_installers/cudnn-local-repo-ubuntu2004-9.3.0_1.0-1_amd64.deb
-sudo dpkg -i cudnn-local-repo-ubuntu2004-9.3.0_1.0-1_amd64.deb
+CUDNN_DEB="cudnn-local-repo-ubuntu2004-9.3.0_1.0-1_amd64.deb"
+wget -q https://developer.download.nvidia.com/compute/cudnn/9.3.0/local_installers/$CUDNN_DEB
+sudo dpkg -i $CUDNN_DEB
 sudo cp /var/cudnn-local-repo-ubuntu2004-9.3.0/cudnn-*-keyring.gpg /usr/share/keyrings/
-sudo apt-get update
-sudo apt-get -y install cudnn
-sudo apt-get -y install cudnn-cuda-12
+sudo apt update
+sudo apt -y install cudnn cudnn-cuda-12
 print_success "cuDNN installed!"
+rm -f $CUDNN_DEB
 
 # Update environment variables
 print_info "Updating environment variables..."
-echo 'export PATH=/usr/local/cuda-12.2/bin:$PATH' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+{
+    echo 'export PATH=/usr/local/cuda-12.2/bin:$PATH'
+    echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH'
+} >> ~/.bashrc
 source ~/.bashrc && print_success "Environment variables updated!"
 
 # Final message
-echo "###############################################################################################################################################"
-echo "##############################                                                                              ###################################"
-echo "##############################                            INSTALLATION COMPLETE                             ###################################"
-echo "##############################                       REBOOT YOUR MACHINE TO APPLY CHANGES                   ###################################"
-echo "###############################################################################################################################################"
+cat <<EOF
+##############################################################################################################
+##############################                                                                              ###################################
+##############################                            INSTALLATION COMPLETE                             ###################################
+##############################                       REBOOT YOUR MACHINE TO APPLY CHANGES                   ###################################
+##############################################################################################################
+EOF
