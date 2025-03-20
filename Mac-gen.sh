@@ -11,23 +11,40 @@ echo "Target MAC address: $MAC"
 echo "Current state of eth0 (before):"
 ip link show eth0
 
+# Check if st_gmac is loaded
+echo "Checking st_gmac module status:"
+lsmod | grep st_gmac || echo "st_gmac not found in lsmod"
+
 # Bring interface down
 echo "Bringing eth0 down..."
 sudo ip link set eth0 down || { echo "Failed to bring eth0 down"; exit 1; }
 sleep 2
 
-# Unload st_gmac driver to ensure MAC can be set
+# Attempt to unload st_gmac driver
 echo "Unloading st_gmac driver..."
-sudo modprobe -r st_gmac || { echo "Failed to unload st_gmac (check lsmod)"; exit 1; }
+if sudo modprobe -r st_gmac; then
+    echo "st_gmac unloaded successfully"
+else
+    echo "Failed to unload st_gmac. Checking why:"
+    lsmod | grep st_gmac
+    sudo lsof /dev/eth0 2>/dev/null || echo "lsof not useful here or not installed"
+    exit 1
+fi
 sleep 2
 
 # Set the MAC address
 echo "Setting new MAC address: $MAC"
 sudo ip link set eth0 address "$MAC" || { echo "Failed to set MAC address"; exit 1; }
 
-# Reload driver
+# Reload st_gmac driver
 echo "Reloading st_gmac driver..."
-sudo modprobe st_gmac || { echo "Failed to reload st_gmac"; exit 1; }
+if sudo modprobe st_gmac; then
+    echo "st_gmac reloaded successfully"
+else
+    echo "Failed to reload st_gmac. Check kernel modules:"
+    lsmod | grep st_gmac
+    exit 1
+fi
 
 # Bring interface back up
 echo "Bringing eth0 up..."
@@ -36,7 +53,3 @@ sudo ip link set eth0 up || { echo "Failed to bring eth0 up"; exit 1; }
 # Verify the change
 echo "New state of eth0 (after):"
 ip link show eth0
-
-# Double-check with ethtool
-echo "MAC according to ethtool:"
-sudo ethtool -i eth0 | grep "bus-info" || echo "ethtool check failed"
