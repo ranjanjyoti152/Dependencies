@@ -14,7 +14,7 @@ ethtool -i eth0
 
 echo "Bringing eth0 down..."
 sudo ip link set eth0 down || { echo "Failed to bring eth0 down"; exit 1; }
-sleep 10  # Longer delay to ensure driver releases
+sleep 10
 
 echo "Setting new MAC address with ip link..."
 sudo ip link set eth0 address "$MAC" || { echo "Failed to set MAC address with ip link"; exit 1; }
@@ -29,5 +29,22 @@ ip link show eth0
 echo "Attempting to set MAC with ethtool..."
 sudo ethtool -s eth0 hwaddr "$MAC" || echo "ethtool MAC set failed (not supported or error)"
 
+echo "State of eth0 after ethtool:"
+ip link show eth0
+
+# Make the MAC change persistent with a udev rule
+echo "Creating udev rule to make MAC change persistent..."
+UDEV_RULE="SUBSYSTEM==\"net\", ACTION==\"add\", ATTR{address}==\"2e:55:b5:72:43:63\", ATTR{dev_id}==\"0x0\", ATTR{type}==\"1\", RUN+=\"/sbin/ip link set dev %k address $MAC\""
+UDEV_FILE="/etc/udev/rules.d/70-persistent-net.rules"
+
+# Write the udev rule
+sudo bash -c "echo '$UDEV_RULE' > $UDEV_FILE" || { echo "Failed to create udev rule"; exit 1; }
+
+# Reload udev rules
+echo "Reloading udev rules..."
+sudo udevadm control --reload-rules || { echo "Failed to reload udev rules"; exit 1; }
+sudo udevadm trigger || { echo "Failed to trigger udev"; exit 1; }
+
+echo "MAC change should now persist across reboots."
 echo "Final state of eth0:"
 ip link show eth0
