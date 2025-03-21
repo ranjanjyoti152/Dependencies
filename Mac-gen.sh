@@ -1,9 +1,22 @@
 #!/bin/bash
-# Get current date and time for uniqueness
-DATE=$(date +%y%m%d)  # YYMMDD, e.g., 250320
-TIME=$(date +%H%M%S)  # HHMMSS, e.g., 192209
-SERIAL="$DATE$TIME"   # Combine for uniqueness
-MAC="02:16:17:${SERIAL:0:2}:${SERIAL:2:2}:${SERIAL:4:2}"
+# Get current date and time components
+YEAR=$(date +%y)       # YY, e.g., 25 for 2025
+MONTH=$(date +%m)      # MM, e.g., 03 for March
+DAY=$(date +%d)        # DD, e.g., 20 for 20th
+HOUR=$(date +%H)       # HH, e.g., 19
+MINUTE=$(date +%M)     # MM, e.g., 22
+SECOND=$(date +%S)     # SS, e.g., 09
+
+# Combine month and day, then compress to 2 digits
+MMDD="${MONTH}${DAY}"  # e.g., 0320
+MMDD_COMPRESSED=$(printf "%02d" $((10#${MMDD} % 100)))  # e.g., 20
+
+# Combine hour and minute, then compress to 2 digits
+HHMM="${HOUR}${MINUTE}"  # e.g., 1922
+HHMM_COMPRESSED=$(printf "%02d" $((10#${HHMM} % 100)))  # e.g., 22
+
+# Construct the MAC address
+MAC="02:16:17:${YEAR}:${MMDD_COMPRESSED}:${HHMM_COMPRESSED}"
 
 echo "Target MAC address: $MAC"
 echo "Current state of eth0 (before):"
