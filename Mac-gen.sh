@@ -46,28 +46,34 @@ sudo ethtool -s eth0 hwaddr "$MAC" || echo "ethtool MAC set failed (not supporte
 echo "State of eth0 after ethtool:"
 ip link show eth0
 
-# Force IP address update
+# Force IP address update with NetworkManager
 echo "Forcing IP address update..."
-# Check if NetworkManager is managing eth0
 if command -v nmcli >/dev/null 2>&1 && nmcli device status | grep -q "eth0.*ethernet.*connected"; then
-    echo "NetworkManager is managing eth0. Disconnecting and reconnecting to renew IP..."
+    echo "NetworkManager is managing eth0."
     # Get the connection name for eth0
     CONN_NAME=$(nmcli -t -f NAME,DEVICE connection show | grep eth0 | cut -d: -f1)
     if [ -n "$CONN_NAME" ]; then
+        # Modify the connection to use a new DHCP client ID based on the new MAC
+        CLIENT_ID="new-client-$MAC"
+        sudo nmcli connection modify "$CONN_NAME" ipv4.dhcp-client-id "$CLIENT_ID"
+        echo "Set new DHCP client ID: $CLIENT_ID"
+
+        # Clear any cached DHCP leases
+        sudo rm -f /var/lib/NetworkManager/*.lease 2>/dev/null
+        echo "Cleared NetworkManager DHCP lease cache."
+
+        # Disconnect and reconnect to force a new DHCP lease
         sudo nmcli connection down "$CONN_NAME"
         sleep 2
         sudo nmcli connection up "$CONN_NAME"
-        echo "NetworkManager connection restarted."
+        echo "NetworkManager connection restarted to renew IP."
     else
         echo "Could not find NetworkManager connection for eth0. Falling back to manual DHCP renewal..."
-        # Flush existing IP addresses
         sudo ip addr flush dev eth0
-        # Try dhclient
         if command -v dhclient >/dev/null 2>&1; then
             sudo dhclient -r eth0
             sudo dhclient eth0
             echo "Requested new DHCP lease with dhclient."
-        # Try dhcpcd
         elif command -v dhcpcd >/dev/null 2>&1; then
             sudo dhcpcd -k eth0
             sudo dhcpcd -n eth0
@@ -83,14 +89,11 @@ if command -v nmcli >/dev/null 2>&1 && nmcli device status | grep -q "eth0.*ethe
     fi
 else
     echo "NetworkManager not found or not managing eth0. Using manual DHCP renewal..."
-    # Flush existing IP addresses
     sudo ip addr flush dev eth0
-    # Try dhclient
     if command -v dhclient >/dev/null 2>&1; then
         sudo dhclient -r eth0
         sudo dhclient eth0
         echo "Requested new DHCP lease with dhclient."
-    # Try dhcpcd
     elif command -v dhcpcd >/dev/null 2>&1; then
         sudo dhcpcd -k eth0
         sudo dhcpcd -n eth0
@@ -141,7 +144,30 @@ SERVICE"
 
 sudo systemctl enable set-mac.service || { echo "Failed to enable set-mac.service"; exit 1; }
 
+# Add a systemd service to force DHCP renewal on boot
+echo "Creating systemd service to force DHCP renewal on boot..."
+DHCP_SERVICE="/etc/systemd/system/force-dhcp-renewal.service"
+sudo bash -c "cat << SERVICE > $DHCP_SERVICE
+[Unit]
+Description=Force DHCP renewal on boot
+After=network-pre.target set-mac.service
+Before=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nmcli connection down \"$CONN_NAME\"
+ExecStart=/usr/bin/sleep 2
+ExecStart=/usr/bin/nmcli connection up \"$CONN_NAME\"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE"
+
+sudo systemctl enable force-dhcp-renewal.service || { echo "Failed to enable force-dhcp-renewal.service"; exit 1; }
+
 echo "MAC change applied and should persist across reboots."
+echo "DHCP renewal service created to ensure new IP on reboot."
 echo "Final state of eth0:"
 ip link show eth0
 echo "Final IP address:"
@@ -151,4 +177,4 @@ echo ""
 echo "To verify persistence:"
 echo "1. Reboot the device: sudo reboot"
 echo "2. Check the MAC and IP: ip addr show eth0"
-echo "Note: If the IP still doesn't change, you may need to clear the DHCP lease on your router or wait for the lease to expire."
+echo "Note: If the IP still doesn't change on reboot, you may need to clear the DHCP lease on your router or wait for the lease to expire."
