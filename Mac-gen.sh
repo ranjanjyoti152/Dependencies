@@ -47,44 +47,62 @@ echo "State of eth0 after ethtool:"
 ip link show eth0
 
 # Force IP address update
-echo "Releasing and renewing DHCP lease to get a new IP..."
-# Stop any network manager that might interfere
-if systemctl is-active --quiet NetworkManager; then
-    sudo systemctl stop NetworkManager
-    echo "Stopped NetworkManager to avoid interference."
-fi
-
-# Flush existing IP addresses
-sudo ip addr flush dev eth0
-
-# Release DHCP lease (if using dhclient)
-if command -v dhclient >/dev/null 2>&1; then
-    sudo dhclient -r eth0
-    echo "Released DHCP lease."
-fi
-
-# Renew DHCP lease
-if command -v dhclient >/dev/null 2>&1; then
-    sudo dhclient eth0
-    echo "Requested new DHCP lease."
-elif command -v dhcpcd >/dev/null 2>&1; then
-    sudo dhcpcd -n eth0
-    echo "Requested new DHCP lease with dhcpcd."
-else
-    echo "No DHCP client found (dhclient or dhcpcd). Trying to restart networking..."
-    # Fallback: Restart networking (method depends on OS)
-    if systemctl is-active --quiet networking; then
-        sudo systemctl restart networking
+echo "Forcing IP address update..."
+# Check if NetworkManager is managing eth0
+if command -v nmcli >/dev/null 2>&1 && nmcli device status | grep -q "eth0.*ethernet.*connected"; then
+    echo "NetworkManager is managing eth0. Disconnecting and reconnecting to renew IP..."
+    # Get the connection name for eth0
+    CONN_NAME=$(nmcli -t -f NAME,DEVICE connection show | grep eth0 | cut -d: -f1)
+    if [ -n "$CONN_NAME" ]; then
+        sudo nmcli connection down "$CONN_NAME"
+        sleep 2
+        sudo nmcli connection up "$CONN_NAME"
+        echo "NetworkManager connection restarted."
     else
-        # For systems using ifup/ifdown
-        sudo ifdown eth0 && sudo ifup eth0
+        echo "Could not find NetworkManager connection for eth0. Falling back to manual DHCP renewal..."
+        # Flush existing IP addresses
+        sudo ip addr flush dev eth0
+        # Try dhclient
+        if command -v dhclient >/dev/null 2>&1; then
+            sudo dhclient -r eth0
+            sudo dhclient eth0
+            echo "Requested new DHCP lease with dhclient."
+        # Try dhcpcd
+        elif command -v dhcpcd >/dev/null 2>&1; then
+            sudo dhcpcd -k eth0
+            sudo dhcpcd -n eth0
+            echo "Requested new DHCP lease with dhcpcd."
+        else
+            echo "No DHCP client found. Trying to restart networking..."
+            if systemctl is-active --quiet networking; then
+                sudo systemctl restart networking
+            else
+                sudo ifdown eth0 && sudo ifup eth0
+            fi
+        fi
     fi
-fi
-
-# Restart NetworkManager if it was stopped
-if systemctl is-enabled --quiet NetworkManager; then
-    sudo systemctl start NetworkManager
-    echo "Restarted NetworkManager."
+else
+    echo "NetworkManager not found or not managing eth0. Using manual DHCP renewal..."
+    # Flush existing IP addresses
+    sudo ip addr flush dev eth0
+    # Try dhclient
+    if command -v dhclient >/dev/null 2>&1; then
+        sudo dhclient -r eth0
+        sudo dhclient eth0
+        echo "Requested new DHCP lease with dhclient."
+    # Try dhcpcd
+    elif command -v dhcpcd >/dev/null 2>&1; then
+        sudo dhcpcd -k eth0
+        sudo dhcpcd -n eth0
+        echo "Requested new DHCP lease with dhcpcd."
+    else
+        echo "No DHCP client found. Trying to restart networking..."
+        if systemctl is-active --quiet networking; then
+            sudo systemctl restart networking
+        else
+            sudo ifdown eth0 && sudo ifup eth0
+        fi
+    fi
 fi
 
 echo "New IP address (after):"
