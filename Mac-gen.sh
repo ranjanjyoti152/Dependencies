@@ -46,65 +46,39 @@ sudo ethtool -s eth0 hwaddr "$MAC" || echo "ethtool MAC set failed (not supporte
 echo "State of eth0 after ethtool:"
 ip link show eth0
 
-# Force IP address update with NetworkManager
+# Force IP address update
 echo "Forcing IP address update..."
-if command -v nmcli >/dev/null 2>&1 && nmcli device status | grep -q "eth0.*ethernet.*connected"; then
-    echo "NetworkManager is managing eth0."
-    # Get the connection name for eth0
-    CONN_NAME=$(nmcli -t -f NAME,DEVICE connection show | grep eth0 | cut -d: -f1)
-    if [ -n "$CONN_NAME" ]; then
-        # Modify the connection to use a new DHCP client ID based on the new MAC
-        CLIENT_ID="new-client-$MAC"
-        sudo nmcli connection modify "$CONN_NAME" ipv4.dhcp-client-id "$CLIENT_ID"
-        echo "Set new DHCP client ID: $CLIENT_ID"
-
-        # Clear any cached DHCP leases
-        sudo rm -f /var/lib/NetworkManager/*.lease 2>/dev/null
-        echo "Cleared NetworkManager DHCP lease cache."
-
-        # Disconnect and reconnect to force a new DHCP lease
-        sudo nmcli connection down "$CONN_NAME"
-        sleep 2
-        sudo nmcli connection up "$CONN_NAME"
-        echo "NetworkManager connection restarted to renew IP."
-    else
-        echo "Could not find NetworkManager connection for eth0. Falling back to manual DHCP renewal..."
-        sudo ip addr flush dev eth0
-        if command -v dhclient >/dev/null 2>&1; then
-            sudo dhclient -r eth0
-            sudo dhclient eth0
-            echo "Requested new DHCP lease with dhclient."
-        elif command -v dhcpcd >/dev/null 2>&1; then
-            sudo dhcpcd -k eth0
-            sudo dhcpcd -n eth0
-            echo "Requested new DHCP lease with dhcpcd."
-        else
-            echo "No DHCP client found. Trying to restart networking..."
-            if systemctl is-active --quiet networking; then
-                sudo systemctl restart networking
-            else
-                sudo ifdown eth0 && sudo ifup eth0
-            fi
-        fi
-    fi
+# Ensure a DHCP client is available
+DHCP_CLIENT=""
+if command -v dhclient >/dev/null 2>&1; then
+    DHCP_CLIENT="dhclient"
+elif command -v dhcpcd >/dev/null 2>&1; then
+    DHCP_CLIENT="dhcpcd"
 else
-    echo "NetworkManager not found or not managing eth0. Using manual DHCP renewal..."
-    sudo ip addr flush dev eth0
-    if command -v dhclient >/dev/null 2>&1; then
-        sudo dhclient -r eth0
-        sudo dhclient eth0
-        echo "Requested new DHCP lease with dhclient."
-    elif command -v dhcpcd >/dev/null 2>&1; then
-        sudo dhcpcd -k eth0
-        sudo dhcpcd -n eth0
-        echo "Requested new DHCP lease with dhcpcd."
+    echo "No DHCP client (dhclient or dhcpcd) found. Attempting to install dhclient..."
+    sudo apt update && sudo apt install -y isc-dhcp-client || { echo "Failed to install dhclient. Please install a DHCP client manually."; exit 1; }
+    DHCP_CLIENT="dhclient"
+fi
+
+# Flush existing IP addresses
+sudo ip addr flush dev eth0
+
+# Release and renew DHCP lease
+if [ "$DHCP_CLIENT" = "dhclient" ]; then
+    # Use a unique client ID to force a new lease
+    sudo dhclient -r eth0
+    sudo dhclient eth0 -i -H "device-$MAC"
+    echo "Requested new DHCP lease with dhclient (client ID: device-$MAC)."
+elif [ "$DHCP_CLIENT" = "dhcpcd" ]; then
+    sudo dhcpcd -k eth0
+    sudo dhcpcd -n eth0 --clientid "device-$MAC"
+    echo "Requested new DHCP lease with dhcpcd (client ID: device-$MAC)."
+else
+    echo "No DHCP client available. Trying to restart networking..."
+    if systemctl is-active --quiet networking; then
+        sudo systemctl restart networking
     else
-        echo "No DHCP client found. Trying to restart networking..."
-        if systemctl is-active --quiet networking; then
-            sudo systemctl restart networking
-        else
-            sudo ifdown eth0 && sudo ifup eth0
-        fi
+        sudo ifdown eth0 && sudo ifup eth0
     fi
 fi
 
@@ -122,7 +96,7 @@ echo "Reloading udev rules..."
 sudo udevadm control --reload-rules || { echo "Failed to reload udev rules"; exit 1; }
 sudo udevadm trigger || { echo "Failed to trigger udev"; exit 1; }
 
-# Add a systemd service for redundancy
+# Add a systemd service to set MAC on boot
 echo "Creating systemd service to set MAC on boot..."
 SYSTEMD_SERVICE="/etc/systemd/system/set-mac.service"
 sudo bash -c "cat << SERVICE > $SYSTEMD_SERVICE
@@ -155,9 +129,9 @@ Before=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/nmcli connection down \"$CONN_NAME\"
-ExecStart=/usr/bin/sleep 2
-ExecStart=/usr/bin/nmcli connection up \"$CONN_NAME\"
+ExecStart=/sbin/ip addr flush dev eth0
+ExecStart=/sbin/$DHCP_CLIENT -r eth0
+ExecStart=/sbin/$DHCP_CLIENT eth0 -i -H device-$MAC
 RemainAfterExit=yes
 
 [Install]
