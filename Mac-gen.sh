@@ -1,4 +1,15 @@
 #!/bin/bash
+# Counter for uniqueness across multiple devices in the same minute
+COUNTER_FILE="/tmp/mac_counter"
+[ -f "$COUNTER_FILE" ] || echo "0" > "$COUNTER_FILE"
+COUNTER=$(cat "$COUNTER_FILE")
+COUNTER=$((COUNTER + 1))
+# Reset counter if it exceeds 155 (to fit within 00-FF range after adding HHMM_COMPRESSED)
+if [ "$COUNTER" -gt 155 ]; then
+    COUNTER=0
+fi
+printf "%d" "$COUNTER" > "$COUNTER_FILE"
+
 # Get current date and time components
 YEAR=$(date +%y)       # YY, e.g., 25 for 2025
 MONTH=$(date +%m)      # MM, e.g., 03 for March
@@ -14,8 +25,15 @@ MMDD_COMPRESSED=$(printf "%02d" $((10#${MMDD} % 100)))
 HHMM="${HOUR}${MINUTE}"
 HHMM_COMPRESSED=$(printf "%02d" $((10#${HHMM} % 100)))
 
+# Add counter to the last octet (HHMM_COMPRESSED + COUNTER, max 255)
+LAST_OCTET=$((10#${HHMM_COMPRESSED} + COUNTER))
+if [ "$LAST_OCTET" -gt 255 ]; then
+    LAST_OCTET=$((LAST_OCTET - 256))
+fi
+LAST_OCTET_HEX=$(printf "%02x" "$LAST_OCTET")
+
 # Construct the MAC address
-MAC="02:16:17:${YEAR}:${MMDD_COMPRESSED}:${HHMM_COMPRESSED}"
+MAC="02:16:17:${YEAR}:${MMDD_COMPRESSED}:${LAST_OCTET_HEX}"
 
 echo "Target MAC address: $MAC"
 echo "Current state of eth0 (before):"
