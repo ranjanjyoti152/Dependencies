@@ -1,35 +1,23 @@
 #!/bin/bash
-# Counter for uniqueness across multiple devices in the same minute
-COUNTER_FILE="/tmp/mac_counter"
-[ -f "$COUNTER_FILE" ] || echo "0" > "$COUNTER_FILE"
-COUNTER=$(cat "$COUNTER_FILE")
-COUNTER=$((COUNTER + 1))
-# Reset counter if it exceeds 155 (to fit within 00-FF range after adding HHMM_COMPRESSED)
-if [ "$COUNTER" -gt 155 ]; then
-    COUNTER=0
-fi
-printf "%d" "$COUNTER" > "$COUNTER_FILE"
-
 # Get current date and time components
 YEAR=$(date +%y)       # YY, e.g., 25 for 2025
 MONTH=$(date +%m)      # MM, e.g., 03 for March
 DAY=$(date +%d)        # DD, e.g., 20 for 20th
 HOUR=$(date +%H)       # HH, e.g., 19
 MINUTE=$(date +%M)     # MM, e.g., 22
+SECOND=$(date +%S)     # SS, e.g., 45
 
 # Combine month and day, then compress
 MMDD="${MONTH}${DAY}"
 MMDD_COMPRESSED=$(printf "%02d" $((10#${MMDD} % 100)))
 
-# Combine hour and minute, then compress
-HHMM="${HOUR}${MINUTE}"
-HHMM_COMPRESSED=$(printf "%02d" $((10#${HHMM} % 100)))
+# Generate a random value (0-99) for additional uniqueness
+RANDOM_VALUE=$(shuf -i 0-99 -n 1)
 
-# Add counter to the last octet (HHMM_COMPRESSED + COUNTER, max 255)
-LAST_OCTET=$((10#${HHMM_COMPRESSED} + COUNTER))
-if [ "$LAST_OCTET" -gt 255 ]; then
-    LAST_OCTET=$((LAST_OCTET - 256))
-fi
+# Combine seconds and random value for the last octet (max 255)
+# Scale the combination to fit within 0-255
+# Use a simple formula: (SECOND * 100 + RANDOM_VALUE) % 256
+LAST_OCTET=$(((10#${SECOND} * 100 + RANDOM_VALUE) % 256))
 LAST_OCTET_HEX=$(printf "%02x" "$LAST_OCTET")
 
 # Construct the MAC address
