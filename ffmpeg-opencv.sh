@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # OpenCV build script with CUDA and FFmpeg support
+# Updated for Ubuntu 22.04 (Jammy)
 # Usage: ./build_opencv.sh [version]
 
 set -e  # Exit on error
@@ -13,14 +14,20 @@ NUM_JOBS=$(nproc)
 
 echo "Building OpenCV ${OPENCV_VERSION} with CUDA and FFmpeg support"
 
-# Install dependencies
+# Install dependencies for Ubuntu 22.04
 echo "Installing dependencies..."
 sudo apt-get update
 sudo apt-get install -y build-essential cmake git pkg-config libgtk-3-dev \
     libavcodec-dev libavformat-dev libswscale-dev libv4l-dev \
     libxvidcore-dev libx264-dev libjpeg-dev libpng-dev libtiff-dev \
     gfortran openexr libatlas-base-dev python3-dev python3-numpy \
-    libtbb2 libtbb-dev libdc1394-22-dev
+    libtbb2 libtbb-dev libdc1394-dev \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    libavresample-dev libvorbis-dev libxine2-dev \
+    libfaac-dev libmp3lame-dev libtheora-dev \
+    libopencore-amrnb-dev libopencore-amrwb-dev \
+    libopenblas-dev libblas-dev liblapack-dev libeigen3-dev \
+    qt5-default
 
 # Create build directory
 mkdir -p $BUILD_DIR
@@ -49,12 +56,13 @@ CUDA_FLAGS=""
 if [ -d "/usr/local/cuda" ]; then
     echo "CUDA found, enabling CUDA support..."
     CUDA_FLAGS="-D WITH_CUDA=ON \
-                -D CUDA_ARCH_BIN=7.5,8.0,8.6 \
+                -D CUDA_ARCH_BIN=5.3,6.0,6.1,7.0,7.5,8.0,8.6 \
                 -D CUDA_ARCH_PTX= \
                 -D OPENCV_DNN_CUDA=ON \
                 -D ENABLE_FAST_MATH=ON \
                 -D CUDA_FAST_MATH=ON \
-                -D WITH_CUBLAS=ON"
+                -D WITH_CUBLAS=ON \
+                -D OPENCV_ENABLE_NONFREE=ON"
 else
     echo "CUDA not found, building without CUDA support."
     echo "Install CUDA first if you want CUDA support."
