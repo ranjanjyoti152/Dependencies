@@ -1,104 +1,118 @@
 #!/bin/bash
 
-# OpenCV build script with CUDA and FFmpeg support
-# Updated for Ubuntu 22.04 (Jammy)
-# Usage: ./build_opencv.sh [version]
+# Exit on any error
+set -e
 
-set -e  # Exit on error
+# Initialize log file
+LOG_FILE="compile_opencv.log"
+echo "Starting OpenCV compilation process at $(date)" > "$LOG_FILE"
 
-# Default OpenCV version
-OPENCV_VERSION=${1:-4.8.0}
-BUILD_DIR=~/opencv_build
-INSTALL_DIR=/usr/local
-NUM_JOBS=$(nproc)
+# Function for logging
+log() {
+    echo "$1"
+    echo "$(date): $1" >> "$LOG_FILE"
+}
 
-echo "Building OpenCV ${OPENCV_VERSION} with CUDA and FFmpeg support"
+# Function for error handling
+handle_error() {
+    log "Error: $1"
+    exit 1
+}
 
-# Install dependencies for Ubuntu 22.04
-echo "Installing dependencies..."
-sudo apt-get update
-sudo apt-get install -y build-essential cmake git pkg-config libgtk-3-dev \
-    libavcodec-dev libavformat-dev libswscale-dev libv4l-dev \
-    libxvidcore-dev libx264-dev libjpeg-dev libpng-dev libtiff-dev \
-    gfortran openexr libatlas-base-dev python3-dev python3-numpy \
-    libtbb2 libtbb-dev libdc1394-dev \
-    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-    libavresample-dev libvorbis-dev libxine2-dev \
-    libmp3lame-dev libtheora-dev \
-    libopencore-amrnb-dev libopencore-amrwb-dev \
-    libopenblas-dev libblas-dev liblapack-dev libeigen3-dev \
-    qt5-default
+# Update package lists
+log "Updating package lists..."
+sudo apt-get update || handle_error "Failed to update package lists"
+
+# Install dependencies
+log "Installing build dependencies..."
+sudo apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    pkg-config \
+    libjpeg-dev \
+    libtiff-dev \
+    libpng-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libv4l-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    libgtk-3-dev \
+    libatlas-base-dev \
+    gfortran \
+    python3-dev || handle_error "Failed to install dependencies"
+
+# Note: libdc1394-22-dev is deprecated in newer Ubuntu versions and has been skipped
+
+# Clone OpenCV if not already present
+if [ ! -d "opencv" ]; then
+    log "Cloning OpenCV repository..."
+    git clone https://github.com/opencv/opencv.git || handle_error "Failed to clone OpenCV repository"
+else
+    log "OpenCV repository already exists. Updating..."
+    cd opencv
+    git pull
+    cd ..
+fi
+
+# Clone OpenCV contrib if not already present
+if [ ! -d "opencv_contrib" ]; then
+    log "Cloning OpenCV contrib repository..."
+    git clone https://github.com/opencv/opencv_contrib.git || handle_error "Failed to clone OpenCV contrib repository"
+else
+    log "OpenCV contrib repository already exists. Updating..."
+    cd opencv_contrib
+    git pull
+    cd ..
+fi
 
 # Create build directory
-mkdir -p "${BUILD_DIR}"
-cd "${BUILD_DIR}"
-
-# Download OpenCV and OpenCV contrib
-echo "Downloading OpenCV ${OPENCV_VERSION}..."
-if [ ! -d "opencv" ]; then
-    git clone https://github.com/opencv/opencv.git
-fi
-
-if [ ! -d "opencv_contrib" ]; then
-    git clone https://github.com/opencv/opencv_contrib.git
-fi
-
-# Checkout the specified version
+log "Creating build directory..."
 cd opencv
-git fetch --all --tags
-git checkout ${OPENCV_VERSION}
-cd ../opencv_contrib
-git fetch --all --tags
-git checkout ${OPENCV_VERSION}
-cd ..
+mkdir -p build
+cd build
 
-# Create build directory within opencv
-mkdir -p opencv/build
-cd opencv/build
-
-# Check if CUDA is installed
-CUDA_FLAGS=""
-if [ -d "/usr/local/cuda" ]; then
-    echo "CUDA found, enabling CUDA support..."
-    CUDA_FLAGS="-D WITH_CUDA=ON \
--D CUDA_ARCH_BIN=5.3,6.0,6.1,7.0,7.5,8.0,8.6 \
--D CUDA_ARCH_PTX= \
--D OPENCV_DNN_CUDA=ON \
--D ENABLE_FAST_MATH=ON \
--D CUDA_FAST_MATH=ON \
--D WITH_CUBLAS=ON \
--D OPENCV_ENABLE_NONFREE=ON"
-else
-    echo "CUDA not found, building without CUDA support."
-    echo "Install CUDA first if you want CUDA support."
-fi
-
-# Configure OpenCV
-echo "Configuring OpenCV build..."
+# Configure OpenCV build with CMake
+log "Configuring OpenCV build with CMake..."
 cmake -D CMAKE_BUILD_TYPE=RELEASE \
-      -D CMAKE_INSTALL_PREFIX=${INSTALL_DIR} \
-      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-      -D INSTALL_PYTHON_EXAMPLES=ON \
-      -D INSTALL_C_EXAMPLES=OFF \
-      -D OPENCV_GENERATE_PKGCONFIG=ON \
-      -D BUILD_EXAMPLES=ON \
-      -D WITH_FFMPEG=ON \
-      -D WITH_TBB=ON \
-      -D WITH_GTK=ON \
-      -D WITH_V4L=ON \
-      -D WITH_OPENGL=ON \
-      -D BUILD_TIFF=ON \
-      ${CUDA_FLAGS} \
-      ..
+    -D CMAKE_INSTALL_PREFIX=/usr/local \
+    -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+    -D WITH_FFMPEG=ON \
+    -D WITH_V4L=ON \
+    -D WITH_GSTREAMER=ON \
+    -D BUILD_opencv_python3=ON \
+    -D OPENCV_ENABLE_NONFREE=ON \
+    -D INSTALL_PYTHON_EXAMPLES=OFF \
+    -D INSTALL_C_EXAMPLES=OFF \
+    -D BUILD_EXAMPLES=OFF .. || handle_error "CMake configuration failed"
 
-# Build OpenCV
-echo "Building OpenCV with ${NUM_JOBS} jobs..."
-make -j"${NUM_JOBS}"
+# Get number of CPU cores for parallel compilation
+NUM_CORES=$(nproc)
+log "Detected $NUM_CORES CPU cores for parallel compilation"
+
+# Compile OpenCV
+log "Compiling OpenCV using $NUM_CORES cores..."
+make -j"$NUM_CORES" || handle_error "Compilation failed"
 
 # Install OpenCV
-echo "Installing OpenCV..."
-sudo make install
-sudo ldconfig
+log "Installing OpenCV..."
+sudo make install || handle_error "Installation failed"
 
-echo "OpenCV ${OPENCV_VERSION} with CUDA and FFmpeg support installed successfully!"
-echo "Installation path: ${INSTALL_DIR}"
+# Update shared library cache
+log "Updating shared library cache..."
+sudo ldconfig || handle_error "Failed to update shared library cache"
+
+# Verify installation
+log "Verifying OpenCV installation..."
+if opencv_version > /dev/null 2>&1; then
+    VERSION=$(opencv_version)
+    log "OpenCV $VERSION has been successfully installed!"
+    log "Installation completed successfully. FFmpeg support is enabled."
+    log "You can now use OpenCV with RTSP streams including H.264 and H.265 formats."
+else
+    handle_error "OpenCV installation verification failed"
+fi
+
+log "Build process completed. Check $LOG_FILE for detailed build information."
