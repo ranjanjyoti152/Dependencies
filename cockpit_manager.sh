@@ -138,35 +138,66 @@ display_help() {
     echo "  sudo $0 update"
 }
 
+# Function to provide interactive menu
+interactive_menu() {
+    echo "=== Cockpit Manager for Ubuntu ==="
+    echo "Please select an option:"
+    echo "1) Install Cockpit"
+    echo "2) Remove Cockpit"
+    echo "3) Update Cockpit"
+    echo "4) Exit"
+    echo
+    
+    read -p "Enter your choice [1-4]: " choice
+    
+    case $choice in
+        1)
+            install_cockpit
+            ;;
+        2)
+            remove_cockpit
+            ;;
+        3)
+            update_cockpit
+            ;;
+        4)
+            echo -e "${GREEN}Exiting...${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option. Please try again.${NC}"
+            exit 1
+            ;;
+    esac
+}
+
 # Main script execution
 check_root
 
-# Check if an argument was provided
-if [ $# -eq 0 ]; then
-    echo -e "${RED}Error: No option specified!${NC}"
-    display_help
-    exit 1
-fi
-
 # Process command line arguments
-case "$1" in
-    install)
-        install_cockpit
-        ;;
-    remove)
-        remove_cockpit
-        ;;
-    update)
-        update_cockpit
-        ;;
-    help)
-        display_help
-        ;;
-    *)
-        echo -e "${RED}Error: Invalid option '$1'${NC}"
-        display_help
-        exit 1
-        ;;
-esac
+if [ $# -eq 0 ]; then
+    # No arguments provided, show interactive menu
+    interactive_menu
+else
+    case "$1" in
+        install)
+            install_cockpit
+            ;;
+        remove)
+            remove_cockpit
+            ;;
+        update)
+            update_cockpit
+            ;;
+        help)
+            display_help
+            ;;
+        *)
+            echo -e "${RED}Error: Invalid option '$1'${NC}"
+            display_help
+            exit 1
+            ;;
+    esac
+fi
 
 exit 0
