@@ -3,7 +3,7 @@
 # Cockpit Manager Script for Ubuntu
 # This script provides options to install, remove, and update Cockpit on Ubuntu servers
 # Author: ranjanjyoti152
-# Date: 2025-04-26
+# Date: 2025-04-26 02:58:10
 
 # Colors for better readability
 GREEN='\033[0;32m'
@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Function to check if script is run as root
 check_root() {
-    if [ "$EUID" -ne 0 ]; then
+    if [ "$(id -u)" -ne 0 ]; then
         echo -e "${RED}Error: This script must be run as root!${NC}"
         echo "Please run with sudo or as root user."
         exit 1
@@ -173,6 +173,12 @@ interactive_menu() {
 
 # Main script execution
 check_root
+
+# First argument is the script name when piped through sh
+# Shift to get the actual first argument
+if [ "$1" = "sh" ] || [ "$1" = "bash" ] || [ "$1" = "-" ]; then
+    shift
+fi
 
 # Process command line arguments
 if [ $# -eq 0 ]; then
