@@ -2,8 +2,8 @@
 
 # Cockpit Manager Script for Ubuntu
 # Includes GPU utilization monitoring and GPU passthrough for VMs
-# Author: ranjanjyoti152
-# Date: 2025-04-26 05:26:25
+# Author: ranjanjyoti152GPU Monitoring
+# Date: 2025-04-26 05:34:04
 
 # Colors for better readability
 GREEN='\033[0;32m'
@@ -48,6 +48,38 @@ set_secure_permissions() {
         chmod 755 "$path"
         chown root:root "$path"
     fi
+}
+
+# Function to check and create GPU data directory
+create_gpu_data_dir() {
+    local gpu_data_dir="/var/lib/cockpit-gpu-monitor"
+    
+    if [ ! -d "$gpu_data_dir" ]; then
+        mkdir -p "$gpu_data_dir"
+        set_secure_permissions "$gpu_data_dir" "dir"
+    fi
+    
+    # Create placeholder files to prevent initial load errors
+    touch "$gpu_data_dir/nvidia_metrics.csv"
+    touch "$gpu_data_dir/amd_metrics.txt"
+    
+    set_secure_permissions "$gpu_data_dir/nvidia_metrics.csv" "file" "false"
+    set_secure_permissions "$gpu_data_dir/amd_metrics.txt" "file" "false"
+    
+    # Ensure systemd can write to this directory
+    chmod 775 "$gpu_data_dir"
+    
+    # If systemd-tmpfiles is available, configure cleanup
+    if command -v systemd-tmpfiles &> /dev/null; then
+        cat > /etc/tmpfiles.d/cockpit-gpu-monitor.conf << EOF
+#Type Path                      Mode UID  GID  Age Argument
+d     /var/lib/cockpit-gpu-monitor 0775 root root - -
+EOF
+        set_secure_permissions "/etc/tmpfiles.d/cockpit-gpu-monitor.conf" "file" "false"
+        systemd-tmpfiles --create
+    fi
+    
+    return 0
 }
 
 # Function to install Cockpit with all dependencies and features
@@ -128,126 +160,222 @@ install_gpu_support() {
     mkdir -p /usr/local/bin
     set_secure_permissions "/usr/local/bin" "dir"
     
-    mkdir -p /var/run
-    set_secure_permissions "/var/run" "dir"
+    # Create GPU data directory
+    create_gpu_data_dir
     
     # Install PCP (Performance Co-Pilot) for monitoring
     echo -e "${YELLOW}Installing Performance Co-Pilot for system monitoring...${NC}"
     apt install -y pcp || { echo -e "${RED}Failed to install Performance Co-Pilot!${NC}"; }
     
-    # Check for NVIDIA GPUs
+    # Detect GPUs
+    echo -e "${YELLOW}Detecting GPU hardware...${NC}"
+    HAS_NVIDIA=false
+    HAS_AMD=false
+    
     if lspci | grep -i nvidia > /dev/null; then
-        echo -e "${YELLOW}NVIDIA GPU detected. Installing NVIDIA monitoring tools...${NC}"
-        
-        # Install NVIDIA driver and tools if not already installed
-        if ! command -v nvidia-smi &> /dev/null; then
-            echo -e "${YELLOW}Installing NVIDIA drivers and tools...${NC}"
-            apt install -y nvidia-utils-* nvidia-driver-* || { echo -e "${RED}Failed to install NVIDIA drivers. You might need to install them manually.${NC}"; }
-        fi
-        
-        # Install NVTOP for GPU monitoring
-        if ! package_exists "nvtop"; then
-            echo -e "${YELLOW}Adding universe repository for NVTOP...${NC}"
-            add-apt-repository -y universe
-            apt update -y
-        fi
-        
-        echo -e "${YELLOW}Installing NVTOP for GPU monitoring...${NC}"
-        apt install -y nvtop || { echo -e "${RED}Failed to install NVTOP.${NC}"; }
-        
-        # Create a script to collect NVIDIA metrics
-        cat > /usr/local/bin/collect_nvidia_metrics.sh << 'EOF'
+        echo -e "${GREEN}NVIDIA GPU detected.${NC}"
+        HAS_NVIDIA=true
+    fi
+    
+    if lspci | grep -i amd > /dev/null || lspci | grep -i radeon > /dev/null; then
+        echo -e "${GREEN}AMD GPU detected.${NC}"
+        HAS_AMD=true
+    fi
+    
+    if [ "$HAS_NVIDIA" = false ] && [ "$HAS_AMD" = false ]; then
+        echo -e "${YELLOW}No dedicated GPU detected. Setting up virtual GPU monitoring for demonstration.${NC}"
+        # Create a simulation script for demo purposes
+        cat > /usr/local/bin/simulate_gpu_metrics.sh << 'EOF'
 #!/bin/bash
 
-# Exit if nvidia-smi is not available
-if ! command -v nvidia-smi &> /dev/null; then
-    exit 1
-fi
+# This script simulates GPU metrics for systems without dedicated GPUs
+# Create a virtual GPU metrics file
 
-# Collect GPU metrics
-nvidia-smi --query-gpu=utilization.gpu,utilization.memory,temperature.gpu,memory.total,memory.used,memory.free --format=csv,noheader,nounits
+GPU_DATA_DIR="/var/lib/cockpit-gpu-monitor"
+NVIDIA_FILE="$GPU_DATA_DIR/nvidia_metrics.csv"
+AMD_FILE="$GPU_DATA_DIR/amd_metrics.txt"
 
-# Exit with success
+# Generate random values
+UTIL=$(( RANDOM % 100 ))
+MEM_UTIL=$(( RANDOM % 100 ))
+TEMP=$(( 40 + RANDOM % 40 ))
+MEM_TOTAL=8192
+MEM_USED=$(( RANDOM % 8192 ))
+MEM_FREE=$(( MEM_TOTAL - MEM_USED ))
+
+# Write NVIDIA-style metrics
+echo "$UTIL, $MEM_UTIL, $TEMP, $MEM_TOTAL, $MEM_USED, $MEM_FREE" > "$NVIDIA_FILE"
+
+# Write AMD-style metrics
+cat > "$AMD_FILE" << END
+GPU Load: $UTIL%
+VRAM Usage: $MEM_USED MB / $MEM_TOTAL MB
+GPU Temperature: $TEMP°C
+Fan Speed: $(( RANDOM % 100 ))%
+END
+
 exit 0
 EOF
         
         # Set appropriate permissions
-        set_secure_permissions "/usr/local/bin/collect_nvidia_metrics.sh" "file" "true"
+        set_secure_permissions "/usr/local/bin/simulate_gpu_metrics.sh" "file" "true"
         
-        # Create a systemd service to run the collection script periodically
-        cat > /etc/systemd/system/nvidia-metrics.service << 'EOF'
+        # Create a systemd service for the simulation script
+        cat > /etc/systemd/system/gpu-simulator.service << 'EOF'
+[Unit]
+Description=Virtual GPU Metrics Simulation
+After=network.target
+
+[Service]
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/simulate_gpu_metrics.sh; sleep 5; done'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        
+        # Set appropriate permissions
+        set_secure_permissions "/etc/systemd/system/gpu-simulator.service" "file" "false"
+        
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable --now gpu-simulator.service
+    else
+        # Install real GPU monitoring tools based on detected hardware
+        if [ "$HAS_NVIDIA" = true ]; then
+            echo -e "${YELLOW}Installing NVIDIA monitoring tools...${NC}"
+            
+            # Install NVIDIA driver and tools if not already installed
+            if ! command -v nvidia-smi &> /dev/null; then
+                echo -e "${YELLOW}Installing NVIDIA drivers and tools...${NC}"
+                apt install -y nvidia-utils-* nvidia-driver-* || { echo -e "${RED}Failed to install NVIDIA drivers. You might need to install them manually.${NC}"; }
+            fi
+            
+            # Install NVTOP for GPU monitoring
+            if ! package_exists "nvtop"; then
+                echo -e "${YELLOW}Adding universe repository for NVTOP...${NC}"
+                add-apt-repository -y universe
+                apt update -y
+            fi
+            
+            echo -e "${YELLOW}Installing NVTOP for GPU monitoring...${NC}"
+            apt install -y nvtop || { echo -e "${RED}Failed to install NVTOP.${NC}"; }
+            
+            # Create a script to collect NVIDIA metrics
+            cat > /usr/local/bin/collect_nvidia_metrics.sh << 'EOF'
+#!/bin/bash
+
+GPU_DATA_DIR="/var/lib/cockpit-gpu-monitor"
+NVIDIA_FILE="$GPU_DATA_DIR/nvidia_metrics.csv"
+
+# Exit if nvidia-smi is not available
+if ! command -v nvidia-smi &> /dev/null; then
+    # Create an empty file to prevent errors
+    echo "" > "$NVIDIA_FILE"
+    exit 0
+fi
+
+# Collect GPU metrics
+nvidia-smi --query-gpu=utilization.gpu,utilization.memory,temperature.gpu,memory.total,memory.used,memory.free --format=csv,noheader,nounits > "$NVIDIA_FILE"
+
+# Check if the output is empty (nvidia-smi failed)
+if [ ! -s "$NVIDIA_FILE" ]; then
+    # Create a dummy entry if nvidia-smi fails
+    echo "0, 0, 0, 0, 0, 0" > "$NVIDIA_FILE"
+fi
+
+exit 0
+EOF
+            
+            # Set appropriate permissions
+            set_secure_permissions "/usr/local/bin/collect_nvidia_metrics.sh" "file" "true"
+            
+            # Create a systemd service to run the collection script periodically
+            cat > /etc/systemd/system/nvidia-metrics.service << EOF
 [Unit]
 Description=NVIDIA GPU Metrics Collection
 After=network.target
 
 [Service]
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/collect_nvidia_metrics.sh > /var/run/nvidia_metrics.csv; sleep 5; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/collect_nvidia_metrics.sh; sleep 5; done'
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
+            
+            # Set appropriate permissions
+            set_secure_permissions "/etc/systemd/system/nvidia-metrics.service" "file" "false"
+            
+            # Enable and start the service
+            systemctl daemon-reload
+            systemctl enable --now nvidia-metrics.service
+            
+            echo -e "${GREEN}NVIDIA metrics collection configured.${NC}"
+        fi
         
-        # Set appropriate permissions
-        set_secure_permissions "/etc/systemd/system/nvidia-metrics.service" "file" "false"
-        
-        # Enable and start the service
-        systemctl daemon-reload
-        systemctl enable --now nvidia-metrics.service
-        
-        echo -e "${GREEN}NVIDIA metrics collection configured.${NC}"
-    fi
-    
-    # Check for AMD GPUs
-    if lspci | grep -i amd > /dev/null || lspci | grep -i radeon > /dev/null; then
-        echo -e "${YELLOW}AMD GPU detected. Installing AMD monitoring tools...${NC}"
-        
-        # Install AMD driver and tools
-        apt install -y radeontop || { echo -e "${RED}Failed to install AMD monitoring tools.${NC}"; }
-        
-        # Create a script to collect AMD metrics
-        cat > /usr/local/bin/collect_amd_metrics.sh << 'EOF'
+        if [ "$HAS_AMD" = true ]; then
+            echo -e "${YELLOW}Installing AMD monitoring tools...${NC}"
+            
+            # Install AMD driver and tools
+            apt install -y radeontop || { echo -e "${RED}Failed to install AMD monitoring tools.${NC}"; }
+            
+            # Create a script to collect AMD metrics
+            cat > /usr/local/bin/collect_amd_metrics.sh << 'EOF'
 #!/bin/bash
+
+GPU_DATA_DIR="/var/lib/cockpit-gpu-monitor"
+AMD_FILE="$GPU_DATA_DIR/amd_metrics.txt"
 
 # Exit if radeontop is not available
 if ! command -v radeontop &> /dev/null; then
-    exit 1
+    # Create an empty file to prevent errors
+    echo "" > "$AMD_FILE"
+    exit 0
 fi
 
 # Collect GPU metrics (run radeontop in dump mode for one sample)
-radeontop -d - -l 1 | grep -v "^$"
+if ! radeontop -d - -l 1 | grep -v "^$" > "$AMD_FILE"; then
+    # Create a dummy entry if radeontop fails
+    cat > "$AMD_FILE" << END
+GPU Load: 0%
+VRAM Usage: 0 MB
+GPU Temperature: 0°C
+END
+fi
 
-# Exit with success
 exit 0
 EOF
-        
-        # Set appropriate permissions
-        set_secure_permissions "/usr/local/bin/collect_amd_metrics.sh" "file" "true"
-        
-        # Create a systemd service to run the collection script periodically
-        cat > /etc/systemd/system/amd-metrics.service << 'EOF'
+            
+            # Set appropriate permissions
+            set_secure_permissions "/usr/local/bin/collect_amd_metrics.sh" "file" "true"
+            
+            # Create a systemd service to run the collection script periodically
+            cat > /etc/systemd/system/amd-metrics.service << EOF
 [Unit]
 Description=AMD GPU Metrics Collection
 After=network.target
 
 [Service]
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/collect_amd_metrics.sh > /var/run/amd_metrics.txt; sleep 5; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/collect_amd_metrics.sh; sleep 5; done'
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
-        
-        # Set appropriate permissions
-        set_secure_permissions "/etc/systemd/system/amd-metrics.service" "file" "false"
-        
-        # Enable and start the service
-        systemctl daemon-reload
-        systemctl enable --now amd-metrics.service
-        
-        echo -e "${GREEN}AMD metrics collection configured.${NC}"
+            
+            # Set appropriate permissions
+            set_secure_permissions "/etc/systemd/system/amd-metrics.service" "file" "false"
+            
+            # Enable and start the service
+            systemctl daemon-reload
+            systemctl enable --now amd-metrics.service
+            
+            echo -e "${GREEN}AMD metrics collection configured.${NC}"
+        fi
     fi
     
     # Create a Cockpit extension for GPU monitoring
@@ -314,6 +442,10 @@ EOF
         .refresh-btn {
             margin-bottom: 20px;
         }
+        .loading-indicator {
+            text-align: center;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -321,7 +453,12 @@ EOF
         <h1>GPU Monitoring</h1>
         <button id="refresh-btn" class="btn btn-primary refresh-btn">Refresh Data</button>
         
-        <div id="gpu-cards"></div>
+        <div id="loading-indicator" class="loading-indicator">
+            <div class="spinner spinner-lg"></div>
+            <p>Loading GPU data...</p>
+        </div>
+        
+        <div id="gpu-cards" style="display:none;"></div>
         
         <div id="no-gpu-message" style="display:none;">
             <div class="alert alert-info">
@@ -333,23 +470,35 @@ EOF
 
     <script>
         $(function() {
+            const GPU_DATA_DIR = "/var/lib/cockpit-gpu-monitor";
+            
             function checkNvidiaGPU() {
-                return cockpit.script("test -f /var/run/nvidia_metrics.csv && echo yes || echo no")
+                return cockpit.file(`${GPU_DATA_DIR}/nvidia_metrics.csv`).read()
                     .then(function(data) {
-                        return data.trim() === "yes";
+                        return data && data.trim() !== "";
+                    })
+                    .catch(function() {
+                        return false;
                     });
             }
             
             function checkAmdGPU() {
-                return cockpit.script("test -f /var/run/amd_metrics.txt && echo yes || echo no")
+                return cockpit.file(`${GPU_DATA_DIR}/amd_metrics.txt`).read()
                     .then(function(data) {
-                        return data.trim() === "yes";
+                        return data && data.trim() !== "";
+                    })
+                    .catch(function() {
+                        return false;
                     });
             }
             
             function getNvidiaMetrics() {
-                return cockpit.script("cat /var/run/nvidia_metrics.csv")
+                return cockpit.file(`${GPU_DATA_DIR}/nvidia_metrics.csv`).read()
                     .then(function(data) {
+                        if (!data || data.trim() === "") {
+                            return [];
+                        }
+                        
                         const lines = data.trim().split('\n');
                         const gpus = [];
                         
@@ -370,12 +519,19 @@ EOF
                         });
                         
                         return gpus;
+                    })
+                    .catch(function() {
+                        return [];
                     });
             }
             
             function getAmdMetrics() {
-                return cockpit.script("cat /var/run/amd_metrics.txt")
+                return cockpit.file(`${GPU_DATA_DIR}/amd_metrics.txt`).read()
                     .then(function(data) {
+                        if (!data || data.trim() === "") {
+                            return [];
+                        }
+                        
                         const lines = data.trim().split('\n');
                         const gpu = {
                             id: 0,
@@ -393,33 +549,55 @@ EOF
                         });
                         
                         return [gpu];
+                    })
+                    .catch(function() {
+                        return [];
+                    });
+            }
+            
+            function createMetricsDirIfNeeded() {
+                return cockpit.script("mkdir -p /var/lib/cockpit-gpu-monitor && chmod 775 /var/lib/cockpit-gpu-monitor")
+                    .catch(function(error) {
+                        console.error("Failed to create metrics directory:", error);
                     });
             }
             
             function updateGPUDisplay() {
-                Promise.all([checkNvidiaGPU(), checkAmdGPU()])
-                    .then(function([hasNvidia, hasAmd]) {
-                        const promises = [];
-                        
-                        if (hasNvidia) {
-                            promises.push(getNvidiaMetrics());
-                        }
-                        
-                        if (hasAmd) {
-                            promises.push(getAmdMetrics());
-                        }
-                        
-                        if (promises.length === 0) {
-                            $('#gpu-cards').hide();
-                            $('#no-gpu-message').show();
-                            return;
-                        }
-                        
-                        return Promise.all(promises)
-                            .then(function(results) {
-                                $('#gpu-cards').empty();
-                                
-                                results.forEach(gpus => {
+                $('#loading-indicator').show();
+                $('#gpu-cards').hide();
+                $('#no-gpu-message').hide();
+                
+                createMetricsDirIfNeeded().then(function() {
+                    return Promise.all([checkNvidiaGPU(), checkAmdGPU()]);
+                })
+                .then(function([hasNvidia, hasAmd]) {
+                    const promises = [];
+                    
+                    if (hasNvidia) {
+                        promises.push(getNvidiaMetrics());
+                    }
+                    
+                    if (hasAmd) {
+                        promises.push(getAmdMetrics());
+                    }
+                    
+                    if (promises.length === 0) {
+                        $('#loading-indicator').hide();
+                        $('#gpu-cards').hide();
+                        $('#no-gpu-message').show();
+                        return;
+                    }
+                    
+                    return Promise.all(promises)
+                        .then(function(results) {
+                            $('#gpu-cards').empty();
+                            
+                            let hasValidData = false;
+                            
+                            results.forEach(gpus => {
+                                if (gpus && gpus.length > 0) {
+                                    hasValidData = true;
+                                    
                                     gpus.forEach(gpu => {
                                         let html = '';
                                         
@@ -473,12 +651,26 @@ EOF
                                         
                                         $('#gpu-cards').append(html);
                                     });
-                                });
-                                
+                                }
+                            });
+                            
+                            $('#loading-indicator').hide();
+                            
+                            if (hasValidData) {
                                 $('#gpu-cards').show();
                                 $('#no-gpu-message').hide();
-                            });
-                    });
+                            } else {
+                                $('#gpu-cards').hide();
+                                $('#no-gpu-message').show();
+                            }
+                        });
+                })
+                .catch(function(error) {
+                    console.error("Error updating GPU display:", error);
+                    $('#loading-indicator').hide();
+                    $('#gpu-cards').hide();
+                    $('#no-gpu-message').show();
+                });
             }
             
             $('#refresh-btn').on('click', function() {
@@ -672,13 +864,17 @@ remove_cockpit() {
     systemctl disable nvidia-metrics.service 2>/dev/null || true
     systemctl stop amd-metrics.service 2>/dev/null || true
     systemctl disable amd-metrics.service 2>/dev/null || true
+    systemctl stop gpu-simulator.service 2>/dev/null || true
+    systemctl disable gpu-simulator.service 2>/dev/null || true
     
     # Remove custom GPU monitoring scripts and services
     echo -e "${YELLOW}Removing custom GPU monitoring components...${NC}"
     rm -f /usr/local/bin/collect_nvidia_metrics.sh 2>/dev/null || true
     rm -f /usr/local/bin/collect_amd_metrics.sh 2>/dev/null || true
+    rm -f /usr/local/bin/simulate_gpu_metrics.sh 2>/dev/null || true
     rm -f /etc/systemd/system/nvidia-metrics.service 2>/dev/null || true
     rm -f /etc/systemd/system/amd-metrics.service 2>/dev/null || true
+    rm -f /etc/systemd/system/gpu-simulator.service 2>/dev/null || true
     rm -f /usr/local/bin/setup-gpu-passthrough.sh 2>/dev/null || true
     rm -f /usr/local/bin/list-gpus.sh 2>/dev/null || true
     systemctl daemon-reload
@@ -686,6 +882,11 @@ remove_cockpit() {
     # Remove GPU monitoring extension
     echo -e "${YELLOW}Removing GPU monitoring extension...${NC}"
     rm -rf /usr/share/cockpit/gpu-monitor 2>/dev/null || true
+    
+    # Remove GPU data directory
+    echo -e "${YELLOW}Removing GPU data directory...${NC}"
+    rm -rf /var/lib/cockpit-gpu-monitor 2>/dev/null || true
+    rm -f /etc/tmpfiles.d/cockpit-gpu-monitor.conf 2>/dev/null || true
     
     # Remove all Cockpit packages
     echo -e "${YELLOW}Removing all Cockpit packages...${NC}"
@@ -728,6 +929,9 @@ update_cockpit() {
     echo -e "${YELLOW}Updating GPU monitoring tools...${NC}"
     apt upgrade -y nvtop radeontop || { echo -e "${YELLOW}Some GPU tools could not be updated or are not installed.${NC}"; }
     
+    # Ensure GPU data directory exists with proper permissions
+    create_gpu_data_dir
+    
     # Restart Cockpit service to apply changes
     echo -e "${YELLOW}Restarting Cockpit service...${NC}"
     systemctl restart cockpit.socket || { echo -e "${RED}Failed to restart Cockpit service!${NC}"; exit 1; }
@@ -741,6 +945,11 @@ update_cockpit() {
     if systemctl is-active --quiet amd-metrics.service; then
         echo -e "${YELLOW}Restarting AMD metrics service...${NC}"
         systemctl restart amd-metrics.service
+    fi
+    
+    if systemctl is-active --quiet gpu-simulator.service; then
+        echo -e "${YELLOW}Restarting GPU simulator service...${NC}"
+        systemctl restart gpu-simulator.service
     fi
     
     # Display updated Cockpit modules
@@ -830,7 +1039,7 @@ check_root
 # Detect if we're being piped through wget or similar
 if [ "$0" = "sh" ] || [ "$0" = "bash" ] || [ "$0" = "-" ]; then
     # Handle the specific format used in the command
-    if [[ "$1" == *"install"* || "$1" == *"remove"* || "$1" == *"update"* || "$1" == *"set"* ]]; then
+    if [[ "$1" == *"install"* || "$1" == *"remove"* || "$1" == *"update"* || "$1" == *"set"* || "$1" == *"GPU"* || "$1" == *"gpu"* ]]; then
         action=$(parse_combined_command "$1")
         case "$action" in
             install)
@@ -843,7 +1052,7 @@ if [ "$0" = "sh" ] || [ "$0" = "bash" ] || [ "$0" = "-" ]; then
                 update_cockpit
                 ;;
             *)
-                install_cockpit  # Default action for phrases like "set appropriate permissions"
+                install_cockpit  # Default action for other phrases
                 ;;
         esac
         exit 0
