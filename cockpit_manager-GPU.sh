@@ -2,7 +2,7 @@
 
 # Cockpit Manager Script for Ubuntu
 # Includes GPU utilization monitoring and GPU passthrough for VMs
-# Author: ranjanjyoti152GPU Monitoring
+# Author: ranjanjyoti152
 # Date: 2025-04-26 05:34:04
 
 # Colors for better readability
