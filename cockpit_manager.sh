@@ -3,7 +3,7 @@
 # Cockpit Manager Script for Ubuntu
 # This script provides options to install, remove, and update Cockpit on Ubuntu servers
 # Author: ranjanjyoti152
-# Date: 2025-04-26 03:10:27
+# Date: 2025-04-26 02:58:10
 
 # Colors for better readability
 GREEN='\033[0;32m'
@@ -20,12 +20,6 @@ check_root() {
     fi
 }
 
-# Function to check if a package exists in repos
-package_exists() {
-    apt-cache show "$1" &>/dev/null
-    return $?
-}
-
 # Function to install Cockpit with all dependencies and features
 install_cockpit() {
     echo -e "${YELLOW}Starting Cockpit installation...${NC}"
@@ -38,31 +32,9 @@ install_cockpit() {
     echo -e "${YELLOW}Installing Cockpit base package...${NC}"
     apt install -y cockpit || { echo -e "${RED}Failed to install Cockpit!${NC}"; exit 1; }
     
-    # Install all official Cockpit modules available in the repositories
-    echo -e "${YELLOW}Installing available official Cockpit modules...${NC}"
-    
-    # Core modules most likely to be available in Ubuntu
-    CORE_MODULES="cockpit-pcp cockpit-packagekit cockpit-storaged cockpit-podman cockpit-networkmanager cockpit-system cockpit-ws cockpit-bridge"
-    apt install -y $CORE_MODULES || { echo -e "${YELLOW}Warning: Some core modules could not be installed. Continuing...${NC}"; }
-    
-    # Additional modules that might not be available in all Ubuntu versions
-    echo -e "${YELLOW}Checking for additional Cockpit modules...${NC}"
-    ADDITIONAL_MODULES=""
-    
-    # Check each module individually
-    for module in cockpit-machines cockpit-sosreport cockpit-389-ds cockpit-navigator cockpit-certificate cockpit-file-sharing cockpit-ostree; do
-        if package_exists "$module"; then
-            ADDITIONAL_MODULES="$ADDITIONAL_MODULES $module"
-        else
-            echo -e "${YELLOW}Module $module is not available in your repositories. Skipping...${NC}"
-        fi
-    done
-    
-    # Install additional modules if any are available
-    if [ -n "$ADDITIONAL_MODULES" ]; then
-        echo -e "${YELLOW}Installing additional available Cockpit modules...${NC}"
-        apt install -y $ADDITIONAL_MODULES || { echo -e "${YELLOW}Warning: Some additional modules could not be installed. Continuing...${NC}"; }
-    fi
+    # Install additional Cockpit modules for enhanced functionality
+    echo -e "${YELLOW}Installing additional Cockpit modules...${NC}"
+    apt install -y cockpit-pcp cockpit-packagekit cockpit-storaged cockpit-podman cockpit-machines cockpit-networkmanager || { echo -e "${RED}Warning: Some additional modules could not be installed. Continuing...${NC}"; }
     
     # Enable and start Cockpit socket service
     echo -e "${YELLOW}Enabling and starting Cockpit service...${NC}"
@@ -73,10 +45,6 @@ install_cockpit() {
         echo -e "${YELLOW}Opening firewall port for Cockpit (9090)...${NC}"
         ufw allow 9090/tcp || { echo -e "${RED}Failed to open firewall port!${NC}"; }
     fi
-    
-    # Display installed Cockpit modules
-    echo -e "${GREEN}Installed Cockpit modules:${NC}"
-    dpkg -l | grep cockpit | awk '{print "- " $2}' | sort
     
     # Check if Cockpit is running
     if systemctl is-active --quiet cockpit.socket; then
@@ -139,13 +107,12 @@ update_cockpit() {
     echo -e "${YELLOW}Restarting Cockpit service...${NC}"
     systemctl restart cockpit.socket || { echo -e "${RED}Failed to restart Cockpit service!${NC}"; exit 1; }
     
-    # Display updated Cockpit modules
-    echo -e "${GREEN}Installed Cockpit modules:${NC}"
-    dpkg -l | grep cockpit | awk '{print "- " $2 " (version: " $3 ")"}' | sort
-    
     # Check if Cockpit is running
     if systemctl is-active --quiet cockpit.socket; then
         echo -e "${GREEN}Cockpit successfully updated!${NC}"
+        # Get current installed version
+        VERSION=$(dpkg -l cockpit | grep cockpit | awk '{print $3}')
+        echo -e "${GREEN}Current version: $VERSION${NC}"
     else
         echo -e "${RED}Something went wrong. Cockpit service is not running after update.${NC}"
         exit 1
@@ -204,48 +171,8 @@ interactive_menu() {
     esac
 }
 
-# Process the combined command format (username + action)
-parse_combined_command() {
-    local input="$1"
-    
-    if [[ "$input" == *"install"* ]]; then
-        echo "install"
-    elif [[ "$input" == *"remove"* ]]; then
-        echo "remove"
-    elif [[ "$input" == *"update"* ]]; then
-        echo "update"
-    else
-        echo "unknown"
-    fi
-}
-
 # Main script execution
 check_root
-
-# Detect if we're being piped through wget or similar
-if [ "$0" = "sh" ] || [ "$0" = "bash" ] || [ "$0" = "-" ]; then
-    # Handle the specific format used in the command
-    if [[ "$1" == *"install"* || "$1" == *"remove"* || "$1" == *"update"* ]]; then
-        action=$(parse_combined_command "$1")
-        case "$action" in
-            install)
-                install_cockpit
-                ;;
-            remove)
-                remove_cockpit
-                ;;
-            update)
-                update_cockpit
-                ;;
-            *)
-                echo -e "${RED}Error: Invalid option in command '$1'${NC}"
-                display_help
-                exit 1
-                ;;
-        esac
-        exit 0
-    fi
-fi
 
 # First argument is the script name when piped through sh
 # Shift to get the actual first argument
@@ -272,25 +199,9 @@ else
             display_help
             ;;
         *)
-            # Check if this might be a combined username+command
-            action=$(parse_combined_command "$1")
-            if [ "$action" != "unknown" ]; then
-                case "$action" in
-                    install)
-                        install_cockpit
-                        ;;
-                    remove)
-                        remove_cockpit
-                        ;;
-                    update)
-                        update_cockpit
-                        ;;
-                esac
-            else
-                echo -e "${RED}Error: Invalid option '$1'${NC}"
-                display_help
-                exit 1
-            fi
+            echo -e "${RED}Error: Invalid option '$1'${NC}"
+            display_help
+            exit 1
             ;;
     esac
 fi
