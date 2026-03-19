@@ -17,6 +17,7 @@ graph TD
     Jetson -- "curl (10.42.0.25)" --> Relay6CH
 
     User -- "curl ((ip):5000)" --> RelayPi
+        User -- "curl ((ip):5000)" --> Pi
     Pi -- "curl ((ip):5000)" --> RelayPi
 
     Relay6CH -- "Channels ON/OFF" --> Jetson
