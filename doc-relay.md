@@ -13,6 +13,7 @@ graph TD
 	User -- SSH/Terminal --> Jetson
 	User -- SSH/Terminal --> Pi
 	Jetson -- curl (10.42.0.25) --> Relay6CH
+	User -- curl ((ip):5000) --> RelayPi
 	Pi -- curl ((ip):5000) --> RelayPi
 	Relay6CH -- Channels ON/OFF --> Jetson
 	RelayPi -- Channels ON/OFF --> Pi
@@ -58,6 +59,8 @@ curl http://10.42.0.25/ch6/off
 **Variable IP, Port:** 5000
 	- Raspberry Pi is the server for relay
 
+Users do not need to SSH into the Raspberry Pi. The relay server accepts curl commands from any device on the same network, allowing channel control directly via HTTP requests.
+
 The relay is connected wirelessly to the Raspberry Pi, with an encrypted key embedded in its firmware. It can only be accessed by the Raspberry Pi. A relay server runs inside the Raspberry Pi, allowing programmatic control of relay channels via its IP and port using curl commands as shown below.
 
 ### Channel Activation (ON)
@@ -79,3 +82,10 @@ curl http://(ip):5000/ch4/off
 curl http://(ip):5000/ch5/off
 curl http://(ip):5000/ch6/off
 ```
+```
+curl http://(ip):5000/ch1/off
+curl http://(ip):5000/ch2/off
+curl http://(ip):5000/ch3/off
+curl http://(ip):5000/ch4/off
+curl http://(ip):5000/ch5/off
+curl http://(ip):5000/ch6/off
