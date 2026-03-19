@@ -83,9 +83,4 @@ curl http://(ip):5000/ch5/off
 curl http://(ip):5000/ch6/off
 ```
 ```
-curl http://(ip):5000/ch1/off
-curl http://(ip):5000/ch2/off
-curl http://(ip):5000/ch3/off
-curl http://(ip):5000/ch4/off
-curl http://(ip):5000/ch5/off
-curl http://(ip):5000/ch6/off
+
