@@ -11,7 +11,6 @@ graph TD
 	Jetson -- Wireless (Key Embedded) --> Relay6CH
 	Pi -- Wireless (Encrypted Key) --> RelayPi
 	User -- SSH/Terminal --> Jetson
-	User -- SSH/Terminal --> Pi
 	Jetson -- curl (10.42.0.25) --> Relay6CH
 	User -- curl ((ip):5000) --> RelayPi
 	Pi -- curl ((ip):5000) --> RelayPi
@@ -82,5 +81,3 @@ curl http://(ip):5000/ch4/off
 curl http://(ip):5000/ch5/off
 curl http://(ip):5000/ch6/off
 ```
-```
-
