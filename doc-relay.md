@@ -12,7 +12,7 @@ graph TD
 	Pi -- Wireless (Encrypted Key) --> RelayPi
 	User -- SSH/Terminal --> Jetson
 	Jetson -- curl (10.42.0.25) --> Relay6CH
-	User -- curl ((ip):5000) --> RelayPi
+	User -- curl ((ip):5000) --> RelayPi: "curl activates/deactivates channels"
 	Pi -- curl ((ip):5000) --> RelayPi
 	Relay6CH -- Channels ON/OFF --> Jetson
 	RelayPi -- Channels ON/OFF --> Pi
