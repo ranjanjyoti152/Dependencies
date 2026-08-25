@@ -134,6 +134,22 @@ pick_driver_branch() {
     | sort -n | tail -1
 }
 
+# Pin the kernel/userspace driver to Ubuntu's build. CUDA + cuDNN still come
+# from NVIDIA's repo; only the driver stack is pinned. Factored out so the
+# "driver already working" early return still writes it.
+write_driver_pin() {
+  cat > /etc/apt/preferences.d/99-nvidia-driver-from-ubuntu <<'PIN'
+# Keep the NVIDIA kernel driver and its userspace from the Ubuntu archive.
+# Ubuntu ships prebuilt, signed modules matching the HWE kernel; NVIDIA's repo
+# ships DKMS packages that may fail to build on very new kernels.
+# CUDA toolkit and cuDNN are unaffected and still come from NVIDIA's repo.
+Package: nvidia-driver-* nvidia-dkms-* nvidia-kernel-* nvidia-utils-* nvidia-compute-utils-* linux-modules-nvidia-* libnvidia-* xserver-xorg-video-nvidia-* nvidia-firmware-*
+Pin: release o=Ubuntu
+Pin-Priority: 1001
+PIN
+  ok "pinned driver stack to Ubuntu archive"
+}
+
 install_driver() {
   step "Installing NVIDIA driver (open kernel modules)"
 
@@ -146,7 +162,8 @@ install_driver() {
   local running
   running=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || true)
   if [ -n "$running" ]; then
-    ok "driver already loaded and responding (${running}); skipping install"
+    ok "driver already loaded and responding (${running}); skipping package install"
+    write_driver_pin      # still pin: the early return must not skip this
     return 0
   fi
 
@@ -195,18 +212,7 @@ install_driver() {
     "nvidia-utils-${DRIVER_BRANCH}"
   ok "driver packages installed"
 
-  # Pin the kernel/userspace driver to Ubuntu's build. CUDA + cuDNN still
-  # come from NVIDIA's repo; only the driver stack is pinned.
-  cat > /etc/apt/preferences.d/99-nvidia-driver-from-ubuntu <<'PIN'
-# Keep the NVIDIA kernel driver and its userspace from the Ubuntu archive.
-# Ubuntu ships prebuilt, signed modules matching the HWE kernel; NVIDIA's repo
-# ships DKMS packages that may fail to build on very new kernels.
-# CUDA toolkit and cuDNN are unaffected and still come from NVIDIA's repo.
-Package: nvidia-driver-* nvidia-dkms-* nvidia-kernel-* nvidia-utils-* nvidia-compute-utils-* linux-modules-nvidia-* libnvidia-* xserver-xorg-video-nvidia-* nvidia-firmware-*
-Pin: release o=Ubuntu
-Pin-Priority: 1001
-PIN
-  ok "pinned driver stack to Ubuntu archive"
+  write_driver_pin
 }
 
 # =============================================================================
@@ -300,14 +306,29 @@ install_cuda() {
 
     apt-get update -qq
 
-    apt-cache policy "cuda-toolkit-${CUDA_PKG_SUFFIX}" 2>/dev/null \
-      | grep -q 'Candidate: [0-9]' \
-      || die "cuda-toolkit-${CUDA_PKG_SUFFIX} not available in the repo"
+    # Capture first, then match. Piping apt-cache straight into `grep -q` is a
+    # SIGPIPE trap: grep -q exits at the first match and closes the pipe,
+    # apt-cache dies with SIGPIPE, and `pipefail` reports rc=141 for the whole
+    # pipeline. It only bites right after `apt-get update` invalidated the
+    # cache, when apt-cache is slow enough to still be writing - so the failure
+    # looks random and reports a present package as "not available".
+    local policy
+    policy=$(apt-cache policy "cuda-toolkit-${CUDA_PKG_SUFFIX}" 2>/dev/null || true)
+    case "$policy" in
+      *"Candidate: "[0-9]*) : ;;
+      *) die "cuda-toolkit-${CUDA_PKG_SUFFIX} not available in the repo" ;;
+    esac
 
     # cuda-toolkit-* deliberately does NOT pull a driver, so it cannot
     # clobber the pinned Ubuntu driver. Verify that assumption anyway.
+    #
+    # The `|| die` is load-bearing: under `set -e` a failing command
+    # substitution aborts the whole script with NO diagnostic at all.
     local plan
-    plan=$(apt-get install -y -s "cuda-toolkit-${CUDA_PKG_SUFFIX}" 2>&1)
+    plan=$(apt-get install -y -s "cuda-toolkit-${CUDA_PKG_SUFFIX}" 2>&1) || {
+      echo "$plan" | tail -15 | sed 's/^/         /'
+      die "apt could not resolve cuda-toolkit-${CUDA_PKG_SUFFIX} (see above)"
+    }
     if echo "$plan" | grep -q '^Remv'; then
       echo "$plan" | grep '^Remv' | sed 's/^/         /'
       die "CUDA install wants to REMOVE packages; refusing"
@@ -317,6 +338,15 @@ install_cuda() {
     ldconfig
     ok "cuda-toolkit-${CUDA_PKG_SUFFIX} installed"
   fi
+
+  # nvcc needs a host C++ compiler to do anything. cuda-nvcc depends on
+  # build-essential so apt normally drags it in, but a minimal/server image can
+  # have no gcc at all - in which case nvcc exists and every compile fails.
+  if ! command -v gcc >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1; then
+    warn "no host compiler found; installing build-essential (nvcc requires it)"
+    apt-get install -y build-essential
+  fi
+  ok "host compiler: $(gcc --version 2>/dev/null | head -1)"
 }
 
 # =============================================================================
@@ -335,10 +365,15 @@ install_cudnn() {
   fi
 
   export DEBIAN_FRONTEND=noninteractive
-  apt-cache policy "$pkg" 2>/dev/null | grep -q 'Candidate: [0-9]' \
-    || die "${pkg} not available. Do NOT install the bare 'cudnn' meta: on
+  # Capture-then-match, same SIGPIPE reason as in install_cuda.
+  local policy
+  policy=$(apt-cache policy "$pkg" 2>/dev/null || true)
+  case "$policy" in
+    *"Candidate: "[0-9]*) : ;;
+    *) die "${pkg} not available. Do NOT install the bare 'cudnn' meta: on
          older cuDNN local repos it pulls the CUDA 12 build, which is
-         incompatible with CUDA ${CUDA_MAJOR_MINOR}."
+         incompatible with CUDA ${CUDA_MAJOR_MINOR}." ;;
+  esac
 
   apt-get install -y "$pkg"
 
@@ -419,6 +454,12 @@ verify() {
   fi
 
   # -- run an actual kernel on every GPU --
+  # Report the skip reason. Silently skipping this made a broken install look
+  # like a passing one, since it is the only check that proves the stack runs.
+  if [ -n "$nvcc" ] && nvidia-smi >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
+    warn "no host gcc: cannot compile the GPU test (apt-get install build-essential)"
+    fails=$((fails+1))
+  fi
   if [ -n "$nvcc" ] && nvidia-smi >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1; then
     local d; d="$(mktemp -d)"
     cat > "$d/t.cu" <<'CU'
@@ -506,18 +547,18 @@ CUDNN
   echo
   if [ "$fails" -eq 0 ]; then
     echo "${G}${B}All checks passed.${N}"
-  else
-    echo "${Y}${B}${fails} check(s) need attention.${N}"
+    return 0
   fi
-  return 0
+  echo "${Y}${B}${fails} check(s) need attention.${N}"
+  return 1
 }
 
 # =============================================================================
 main() {
   if [ "$VERIFY_ONLY" -eq 1 ]; then
     KERNEL="$(uname -r)"
-    verify
-    exit 0
+    verify && exit 0
+    exit 1          # propagate failure so callers/CI can detect it
   fi
 
   need_root
@@ -527,7 +568,10 @@ main() {
   install_cuda
   install_cudnn
   setup_env
-  verify
+
+  # Don't let a failed check abort before the closing advice prints.
+  local verify_rc=0
+  verify || verify_rc=$?
 
   step "Done"
   echo "  Open a new shell (or: source ${target_home}/.bashrc) to pick up nvcc."
